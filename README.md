@@ -26,25 +26,35 @@ The datasets used in the experiments include:
 | Urban Land Cover                        | 168        | 148            | [Link](https://archive.ics.uci.edu/dataset/295/urban+land+cover) |
 | DARWIN                                  | 174        | 451            | [Link](https://archive.ics.uci.edu/dataset/732/darwin) |
 | Wine                                    | 178        | 13             | [Link](https://archive.ics.uci.edu/dataset/186/wine+quality) |
-| Flags                                   | 194        | 30             | [Link](https://archive.ics.uci.edu/ml/datasets/Flags) |
-| Parkinson Speech                        | 1,040      | 26             | [Link](https://archive.ics.uci.edu/ml/datasets/Parkinson+Speech+Dataset+with+Multiple+Types+of+Sound+Recordings) |
-| Communities and Crime                   | 1,994      | 128            | [Link](https://archive.ics.uci.edu/ml/datasets/Communities+and+Crime) |
-| Turkiye Student Evaluation              | 5,820      | 33             | [Link](https://archive.ics.uci.edu/ml/datasets/Turkiye+Student+Evaluation) |
-| In-vehicle Coupon Recommendation        | 12,684     | 23             | [Link](https://archive.ics.uci.edu/ml/datasets/in-vehicle+coupon+recommendation) |
-| Human Activity Recognition              | 10,299     | 561            | [Link](https://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones) |
-| Quality Assessment of Digital Colposcopies | 30,000  | 23             | [Link](https://archive.ics.uci.edu/ml/datasets/Quality+Assessment+of+Digital+Colposcopies) |
-| RT-IoT2022                              | 123,117    | 85             | [Link](https://archive.ics.uci.edu/ml/datasets/Real-Time+IoT+Network+Intrusion+Dataset+2022) |
-| Gender by Name                          | 147,270    | 4              | [Link](https://archive.ics.uci.edu/ml/datasets/Gender+by+Name) |
-| Multivariate Gait Data                  | 181,800    | 7              | [Link](https://archive.ics.uci.edu/ml/datasets/Multivariate+Gait+Data) |
-| Wave Energy Converters                  | 288,000    | 49             | [Link](https://archive.ics.uci.edu/ml/datasets/Wave+Energy+Converters) |
-| 3D Road Network                         | 434,874    | 4              | [Link](https://archive.ics.uci.edu/ml/datasets/3D+Road+Network+%28North+Jutland%2C+Denmark%29) |
-| Year Prediction MSD                     | 515,345    | 90             | [Link](https://archive.ics.uci.edu/ml/datasets/YearPredictionMSD) |
-| Online Retail                           | 1,067,371  | 8              | [Link](https://archive.ics.uci.edu/ml/datasets/Online+Retail) |
-| MetroPT-3 Dataset                       | 1,516,948  | 15             | [Link](https://archive.ics.uci.edu/ml/datasets/MetroPT-3) |
-| Taxi Trajectory                         | 1,710,670  | 9              | [Link](https://archive.ics.uci.edu/ml/datasets/Taxi+Service+Trajectory+-+Prediction+Challenge%2C+ECML+PKDD+2015) |
+| Flags                                   | 194        | 30             | [Link](https://archive.ics.uci.edu/dataset/40/flags) |
+| Parkinson Speech                        | 1,040      | 26             | [Link](https://archive.ics.uci.edu/dataset/301/parkinson+speech+dataset+with+multiple+types+of+sound+recordings) |
+| Communities and Crime                   | 1,994      | 128            | [Link](https://archive.ics.uci.edu/dataset/183/communities+and+crime) |
+| Turkiye Student Evaluation              | 5,820      | 33             | [Link](https://archive.ics.uci.edu/dataset/262/turkiye+student+evaluation) |
+| In-vehicle Coupon Recommendation        | 12,684     | 23             | [Link](https://archive.ics.uci.edu/dataset/603/in+vehicle+coupon+recommendation) |
+| Human Activity Recognition              | 10,299     | 561            | [Link](https://archive.ics.uci.edu/dataset/240/human+activity+recognition+using+smartphones) |
+| Quality Assessment of Digital Colposcopies | 30,000  | 23             | [Link](https://archive.ics.uci.edu/dataset/384/quality+assessment+of+digital+colposcopies) |
+| RT-IoT2022                              | 123,117    | 85             | [Link](https://archive.ics.uci.edu/dataset/942/rt-iot2022) |
+| Gender by Name                          | 147,270    | 4              | [Link](https://archive.ics.uci.edu/dataset/591/gender+by+name) |
+| Multivariate Gait Data                  | 181,800    | 7              | [Link](https://archive.ics.uci.edu/dataset/760/multivariate+gait+data) |
+| Wave Energy Converters                  | 288,000    | 49             | [Link](https://archive.ics.uci.edu/dataset/494/wave+energy+converters) |
+| 3D Road Network                         | 434,874    | 4              | [Link](https://archive.ics.uci.edu/dataset/246/3d+road+network+north+jutland+denmark) |
+| Year Prediction MSD                     | 515,345    | 90             | [Link](https://archive.ics.uci.edu/dataset/203/yearpredictionmsd) |
+| Online Retail                           | 1,067,371  | 8              | [Link](https://archive.ics.uci.edu/dataset/352/online+retail) |
+| MetroPT-3 Dataset                       | 1,516,948  | 15             | [Link](https://archive.ics.uci.edu/dataset/791/metropt+3+dataset) |
+| Taxi Trajectory                         | 1,710,670  | 9              | [Link](https://archive.ics.uci.edu/dataset/339/taxi+service+trajectory+prediction+challenge+ecml+pkdd+2015) |
 
 ### Clustering Pipelines
-The clustering results were generated using 16 different clustering pipelines, each combining various preprocessing steps and clustering algorithms (are located in [clustering_pipelines.py](https://github.com/yourusername/ClusterExplorer/blob/main/experiments/clustering_pipelines.py)). The preprocessing steps included standard scaling for numeric columns, one-hot encoding for categorical data, and dimensionality reduction using PCA. The clustering algorithms used were K-Means, DBSCAN, Birch, Spectral Clustering, and Affinity Propagation.
+The clustering results were generated using 16 different clustering pipelines, each combining various preprocessing steps and clustering algorithms (are located in [`clustering_pipelines.py`](https://github.com/yourusername/ClusterExplorer/blob/main/experiments/clustering_pipelines.py)). The preprocessing steps included standard scaling for numeric columns, one-hot encoding for categorical data, and dimensionality reduction using PCA. The clustering algorithms used were K-Means, DBSCAN, Birch, Spectral Clustering, and Affinity Propagation.
+
+To use this, you need to provide the datasets folder (first save the datasets in this folder) and the folder to save the pipelines results.
+
+### Running the Experiments
+For running the experiments (located in [`ClusterExplorer/experiments`](https://github.com/yourusername/ClusterExplorer/blob/main/experiments)), you need to provide the folder of the pipelines result for [`BaselinesExperiment.py`](https://github.com/yourusername/ClusterExplorer/blob/main/experiments/BaselinesExperiment.py). The results will be saved in [`ClusterExplorer/experiments`]([https://github.com/yourusername/ClusterExplorer/blob/ma](https://github.com/yourusername/ClusterExplorer/blob/main/experiments))
+
+## Additional Experiments
+This folder contains information about our attribute-selection optimization on both the explanation quality and running times.
+For running the experiments (located in [`ClusterExplorer/additional_experiments`](https://github.com/yourusername/ClusterExplorer/blob/main/additional_experiments)), you need to provide the folder of the pipelines result for [`P_ValueExperiment.py`](https://github.com/yourusername/ClusterExplorer/blob/main/additional_experiments/P_ValueExperiment.py). The results will be saved in [`ClusterExplorer/additional_experiments`]([https://github.com/yourusername/ClusterExplorer/blob/ma](https://github.com/yourusername/ClusterExplorer/blob/main/additional_experiments))
+
 
 
 
