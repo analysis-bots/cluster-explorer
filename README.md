@@ -5,7 +5,7 @@ This repository contains the code for ClusterExplorer, a novel explainability to
 Our approach formulates the explanation of clusters as the identification of concise conjunctions of predicates that maximize the coverage of the cluster's data points while minimizing separation from other clusters. We achieve this by reducing the problem to generalized frequent-itemsets mining (gFIM), where items correspond to explanation predicates, and itemset frequency indicates coverage. To enhance efficiency, we leverage inherent problem properties and implement attribute selection to further reduce computational costs.
 
 ## Source Code
-The source code is located in the [`ClusterExplorer/src`](https://github.com/analysis-bots/cluster-explorer/tree/main/src) directory. This directory contains the following key components:
+The source code is located in the [`cluster-explorer/src`](https://github.com/analysis-bots/cluster-explorer/tree/main/src) directory. This directory contains the following key components:
 
 1. **Explainer**:[`explainer.py`](https://github.com/analysis-bots/cluster-explorer/tree/main/src/explainer.py) Generates rule-based explanations for each cluster using frequent-itemsets mining.
 
@@ -49,11 +49,11 @@ The clustering results were generated using 16 different clustering pipelines, e
 To use this, you need to provide the datasets folder (first save the datasets in this folder) and the folder to save the pipelines results.
 
 ### Running the Experiments
-For running the experiments (located in [`ClusterExplorer/experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/experiments)), you need to provide the folder of the pipelines result for [`BaselinesExperiment.py`](https://github.com/analysis-bots/cluster-explorer/tree/main/experiments/BaselinesExperiment.py). The results will be saved in [`ClusterExplorer/experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/experiments))
+For running the experiments (located in [`cluster-explorer/experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/experiments)), you need to provide the folder of the pipelines result for [`BaselinesExperiment.py`](https://github.com/analysis-bots/cluster-explorer/tree/main/experiments/BaselinesExperiment.py). The results will be saved in [`cluster-explorer/experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/experiments))
 
 ## Additional Experiments
 This folder contains information about our attribute-selection optimization on both the explanation quality and running times.
-For running the experiments (located in [`ClusterExplorer/additional_experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/additional_experiments)), you need to provide the folder of the pipelines result for [`P_ValueExperiment.py`](https://github.com/analysis-bots/cluster-explorer/tree/main/additional_experiments/P_ValueExperiment.py). The results will be saved in [`ClusterExplorer/additional_experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/additional_experiments))
+For running the experiments (located in [`cluster-explorer/additional_experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/additional_experiments)), you need to provide the folder of the pipelines result for [`P_ValueExperiment.py`](https://github.com/analysis-bots/cluster-explorer/tree/main/additional_experiments/P_ValueExperiment.py). The results will be saved in [`cluster-explorer/additional_experiments`](https://github.com/analysis-bots/cluster-explorer/tree/main/additional_experiments))
 
 
 
