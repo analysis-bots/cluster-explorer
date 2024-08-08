@@ -108,7 +108,7 @@ class Explainer:
         encoded_df = pd.DataFrame(encoded_categories, columns=enc.get_feature_names_out(categorical_features))
         self.df = pd.concat([self.df.drop(categorical_features, axis=1), encoded_df], axis=1)
 
-    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5):
+    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5, p_value=0):
         # Initialize the dataframe to store explanations for all clusters
         explanation_for_all_clusters = pd.DataFrame(columns=["coverage", "separation_err", "conciseness", "Cluster"])
 
@@ -132,7 +132,7 @@ class Explainer:
         self.one_hot()
 
         # Determine the number of top features to consider based on conciseness threshold
-        p_value = int((1 / conciseness_threshold))
+        #p_value = int((1 / conciseness_threshold))
         feature_importance = self.model_feature_importance(self.df.copy(), self.labels, p_value)
 
         for cluster_number in self.labels.unique():

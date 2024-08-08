@@ -8,20 +8,17 @@ import warnings
 from csv import writer
 from sklearn.preprocessing import OneHotEncoder
 
-import DecisionTreeExplanations
-import Experiments
-import SHAPexplanation
-import SkopeRules
-import Anchor
+from experiments import Experiments
 from src.explainer import Explainer
-from AnalyzeItemsets import Analyze
+from src.AnalyzeItemsets import Analyze
+
 
 warnings.filterwarnings('ignore')
 
 # File paths and global variables
-FOLDER_PATH = 'results'
+FOLDER_PATH = 'p_results'
 DATASETS_FILE = 'Datasets.csv'
-PIPELINE_SCORES_FILE = 'PipelineScores.csv'
+PIPELINE_SCORES_FILE = 'Pipeline_Scores.csv'
 
 
 def add_dataset_to_csv(dataset, dataset_name, file_name=DATASETS_FILE):
@@ -71,7 +68,7 @@ def analyze_rules(rules_dict, original_data):
     return total_df.reset_index(names=['rule'])
 
 
-def process_explainer(train_df, labels, coverage_threshold, conciseness_threshold, separation_threshold):
+def process_explainer_p_exact(train_df, labels, coverage_threshold, conciseness_threshold, separation_threshold):
     """Processes ClusterExplore explanations."""
     try:
         explainer = Explainer(train_df, labels)
@@ -80,95 +77,75 @@ def process_explainer(train_df, labels, coverage_threshold, conciseness_threshol
             coverage_threshold=coverage_threshold,
             conciseness_threshold=conciseness_threshold,
             separation_threshold=separation_threshold,
-            p_value=int((1 / conciseness_threshold))
+            p_value= len(train_df.columns)
         )
         end_time = time.time()
         execution_time = (end_time - start_time) / 60
-        df_cluster_explore['framework'] = 'ClusterExplore'
+        df_cluster_explore['p'] = 0
         return df_cluster_explore, execution_time
     except Exception as e:
-        print(f"Error processing ClusterExplore: {str(e)}")
+        print(f"Error processing ClusterExplore p=Exact: {str(e)}")
         traceback.print_exc()
         return None, None
+    #int((1 / conciseness_threshold))
 
-
-def process_skope_rules(train_df, labels, max_length, coverage_threshold, separation_threshold):
-    """Processes SkopeRules explanations."""
+def process_explainer_p_1(train_df, labels, coverage_threshold, conciseness_threshold, separation_threshold):
+    """Processes ClusterExplore explanations."""
     try:
+        explainer = Explainer(train_df, labels)
         start_time = time.time()
-        rules = SkopeRules.analyze_skope_rules(train_df, list(labels), max_length, coverage_threshold, separation_threshold)
-        end_time = time.time()
-        data = train_df.copy()
-        data['Cluster'] = labels
-        skope_rules_df = analyze_rules(rules, data)
-        execution_time = (end_time - start_time) / 60
-        skope_rules_df['framework'] = 'SkopeRules'
-        return skope_rules_df, execution_time
-    except Exception as e:
-        print(f"Error processing SkopeRules: {str(e)}")
-        traceback.print_exc()
-        return None, None
-
-
-def process_decision_tree(train_df, labels, conciseness_threshold, coverage_threshold, separation_threshold):
-    """Processes Decision Tree explanations."""
-    try:
-        start_time = time.time()
-        rules = DecisionTreeExplanations.analyze_cluster_report(train_df, list(labels), theta_con=conciseness_threshold)
-        end_time = time.time()
-        data = train_df.copy()
-        data['Cluster'] = labels
-        decision_tree_df = analyze_rules(rules, data)
-        decision_tree_df = decision_tree_df.loc[decision_tree_df['separation_err'] <= separation_threshold]
-        decision_tree_df = decision_tree_df.loc[decision_tree_df['coverage'] >= coverage_threshold]
-        execution_time = (end_time - start_time) / 60
-        decision_tree_df['framework'] = 'decision_tree'
-        return decision_tree_df, execution_time
-    except Exception as e:
-        print(f"Error processing decision_tree: {str(e)}")
-        traceback.print_exc()
-        return None, None
-
-
-def process_shap(data_df, labels, numeric_features, categorical_features, max_length, coverage_threshold, separation_threshold):
-    """Processes SHAP explanations."""
-    try:
-        start_time = time.time()
-        rules = SHAPexplanation.analyze_clustering_explainer_with_shap_values(
-            data_df.copy(), list(labels), numeric_features,
-            categorical_features, max_length
+        df_cluster_explore = explainer.generate_explanations(
+            coverage_threshold=coverage_threshold,
+            conciseness_threshold=conciseness_threshold,
+            separation_threshold=separation_threshold,
+            p_value= int((1 / conciseness_threshold))
         )
         end_time = time.time()
-        data = data_df.copy()
-        data['Cluster'] = labels
-        shap_df = analyze_rules(rules, data)
-        shap_df = shap_df.loc[shap_df['separation_err'] <= separation_threshold]
-        shap_df = shap_df.loc[shap_df['coverage'] >= coverage_threshold]
         execution_time = (end_time - start_time) / 60
-        shap_df['framework'] = 'SHAP'
-        return shap_df, execution_time
+        df_cluster_explore['p'] = 0
+        return df_cluster_explore, execution_time
     except Exception as e:
-        print(f"Error processing SHAP: {str(e)}")
+        print(f"Error processing ClusterExplore p=1: {str(e)}")
         traceback.print_exc()
         return None, None
 
-
-def process_anchor(train_df, labels, coverage_threshold, separation_threshold):
-    """Processes Anchor explanations."""
+def process_explainer_p_1_5(train_df, labels, coverage_threshold, conciseness_threshold, separation_threshold):
+    """Processes ClusterExplore explanations."""
     try:
+        explainer = Explainer(train_df, labels)
         start_time = time.time()
-        rules = Anchor.analyze_anchor_rules(train_df, np.array(list(labels)))
+        df_cluster_explore = explainer.generate_explanations(
+            coverage_threshold=coverage_threshold,
+            conciseness_threshold=conciseness_threshold,
+            separation_threshold=separation_threshold,
+            p_value= int(int((1 / conciseness_threshold))*1.5)
+        )
         end_time = time.time()
-        data = train_df.copy()
-        data['Cluster'] = labels
-        anchor_df = analyze_rules(rules, data)
-        anchor_df = anchor_df.loc[anchor_df['separation_err'] <= separation_threshold]
-        anchor_df = anchor_df.loc[anchor_df['coverage'] >= coverage_threshold]
         execution_time = (end_time - start_time) / 60
-        anchor_df['framework'] = 'Anchor'
-        return anchor_df, execution_time
+        df_cluster_explore['p'] = 0
+        return df_cluster_explore, execution_time
     except Exception as e:
-        print(f"Error processing Anchor: {str(e)}")
+        print(f"Error processing ClusterExplore p=1.5: {str(e)}")
+        traceback.print_exc()
+        return None, None
+
+def process_explainer_p_2(train_df, labels, coverage_threshold, conciseness_threshold, separation_threshold):
+    """Processes ClusterExplore explanations."""
+    try:
+        explainer = Explainer(train_df, labels)
+        start_time = time.time()
+        df_cluster_explore = explainer.generate_explanations(
+            coverage_threshold=coverage_threshold,
+            conciseness_threshold=conciseness_threshold,
+            separation_threshold=separation_threshold,
+            p_value= int(int((1 / conciseness_threshold))*2)
+        )
+        end_time = time.time()
+        execution_time = (end_time - start_time) / 60
+        df_cluster_explore['p'] = 0
+        return df_cluster_explore, execution_time
+    except Exception as e:
+        print(f"Error processing ClusterExplore p=2: {str(e)}")
         traceback.print_exc()
         return None, None
 
@@ -217,22 +194,21 @@ def process_clusters(df, data_df, cluster_column_index, dataset_information, dat
 
         max_length = int(1 / 0.2)  # conciseness_threshold
 
-        frameworks = {
-            'ClusterExplore': lambda: process_explainer(train_df, labels, 0.8, 0.2, 0.3),
-            'SkopeRules': lambda: process_skope_rules(train_df, labels, max_length, 0.8, 0.3),
-            'decision_tree': lambda: process_decision_tree(train_df, labels, 0.2, 0.8, 0.3),
-            'SHAP': lambda: process_shap(data_df, labels, numeric_features, categorical_features, max_length, 0.8, 0.3),
-            'Anchor': lambda: process_anchor(train_df, labels, 0.8, 0.3),
+        p_values = {
+            'Exact': lambda: process_explainer_p_exact(train_df, labels, 0.8, 0.2, 0.3),
+            '1': lambda: process_explainer_p_1(train_df, labels, 0.8, 0.2, 0.3),
+            '1.5': lambda: process_explainer_p_1_5(train_df, labels, 0.8, 0.2, 0.3),
+            '2': lambda: process_explainer_p_2(train_df, labels, 0.8, 0.2, 0.3),
         }
 
-        for framework_name, framework_function in frameworks.items():
+        for p_name, p_function in p_values.items():
             try:
-                result_df, exec_time = framework_function()
+                result_df, exec_time = p_function()
                 if result_df is not None:
-                    time_dict[framework_name] = exec_time
+                    time_dict[p_name] = exec_time
                     dataframes.append(result_df)
             except Exception as e:
-                print(f"Error processing {framework_name}: {str(e)}")
+                print(f"Error processing {p_name}: {str(e)}")
                 traceback.print_exc()
 
         aggregate_results(dataframes, dataset_information, dataset_name, pipeline_steps, unique_labels, time_dict)
@@ -253,15 +229,15 @@ def aggregate_results(dataframes, dataset_information, dataset_name, pipeline_st
         df_experiments = pd.concat(dataframes, ignore_index=True)
         ex_df = Experiments.calculation(df_experiments)
 
-        for baseline in ex_df.index:
-            QSE_mean = ex_df.loc[baseline, 'QSE_mean']
+        for p_value in ex_df.index:
+            QSE_mean = ex_df.loc[p_value, 'QSE_mean']
             results = {
                 'Dataset': dataset_name,
                 'Pipeline Steps': pipeline_steps,
                 'Number of Clusters': len(unique_labels),
-                'baseline': baseline,
+                'p': p_value,
                 'QSE_mean': QSE_mean,
-                'time(minutes)': time_dict[baseline],
+                'time(minutes)': time_dict[p_value],
             }
             merged_dict = {**dataset_information, **results}
             write_to_csv(merged_dict, 'Experiments results.csv')
