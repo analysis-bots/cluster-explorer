@@ -2,7 +2,7 @@ import pandas as pd
 from pandas.core.interchange.dataframe_protocol import DataFrame
 from typing import List
 
-import ScoreMetrics
+from . import ScoreMetrics
 
 
 class Analyze:

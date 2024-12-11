@@ -1,8 +1,8 @@
 from sklearn.preprocessing import OneHotEncoder
-import gFIM
-from src.AnalyzeItemsets import Analyze
-from utils import *
-from src.binning_methods import *
+from . import gFIM
+from .AnalyzeItemsets import Analyze
+from .utils import *
+from .binning_methods import *
 from typing import List, Callable
 
 
@@ -277,8 +277,8 @@ class Explainer:
             original_df['Cluster'] = self.labels
 
             # Filter original data for the top features and analyze explanations
-            filtered_original_df = original_df[top_features]
-            filtered_original_df['Cluster'] = self.labels
+            filtered_original_df = original_df[[*top_features, 'Cluster']]
+            # filtered_original_df['Cluster'] = self.labels
             explanation_candidates = analyze.analyze_explanation(filtered_original_df, rules, cluster_number,
                                                                  [i for i in self.labels.unique() if
                                                                   i != cluster_number])

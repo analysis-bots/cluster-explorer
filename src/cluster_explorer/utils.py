@@ -183,3 +183,25 @@ def get_optimal_splits(df: DataFrame, tree_splits: np.ndarray, X: DataFrame, y: 
     split_scores = np.array([evaluate_split(split) for split in tree_splits])
     optimal_split_idx = np.argmin(split_scores)
     return sorted(tree_splits[:optimal_split_idx + 1])
+
+def str_rule_to_list(rule: str) -> List:
+    """
+    Convert a rule string to a list of conditions.
+
+    This function takes a rule string and converts it into a list of conditions.
+    Each condition is represented as a list containing a variable, an operator, and a value.
+
+    :param rule: A string representing the rule.
+    :return: A list of conditions representing the rule.
+    """
+    rule = rule.split(", [")
+    for idx, r in enumerate(rule):
+        r = r.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
+        r = r.split(",")
+        if len(r) == 3:
+            r[2] = np.float64(r[2].replace("np.float64(", "").replace(")", ""))
+            r[1] = r[1].replace(" ", "")
+        rule[idx] = r
+
+    return rule
+

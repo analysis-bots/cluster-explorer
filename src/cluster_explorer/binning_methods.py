@@ -11,7 +11,7 @@ import numpy as np
 from pandas import DataFrame, Series
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from optbinning import MulticlassOptimalBinning
-from utils import get_optimal_splits
+from .utils import get_optimal_splits
 from typing import List, Tuple
 
 
