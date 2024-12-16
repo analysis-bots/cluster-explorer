@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Tuple, Generator, Any
+from typing import List, Tuple, Generator, Any, Set
 
 from numpy import number
 from pandas import DataFrame, Series
@@ -204,4 +204,96 @@ def str_rule_to_list(rule: str) -> List:
         rule[idx] = r
 
     return rule
+
+
+def merge_ranges(ranges: List[Tuple[number, number]]) -> set[Tuple[number, number]]:
+    """
+    Merge overlapping ranges.
+
+    This function takes a list of ranges and merges any overlapping ranges.
+    If two ranges overlap, they are merged into a single range that spans both ranges.
+
+    :param ranges: A list of ranges to be merged.
+    :return: A list of merged ranges.
+    """
+    ranges = [r for r in ranges if len(r) == 2]
+    ranges.sort()
+    merged_ranges = set()
+    # For every range, check if it overlaps with any other range. If it does, merge the ranges.
+    # We use a set to avoid duplicate ranges.
+    for r in ranges:
+        for other_r in ranges:
+            if r != other_r:
+                if r[1] >= other_r[0] and r[0] <= other_r[1]:
+                    first_start, first_end = r
+                    second_start, second_end = other_r
+                    if first_start == -np.inf:
+                        first_start = second_start
+                    if first_end == np.inf:
+                        first_end = second_end
+                    if second_start == -np.inf:
+                        second_start = first_start
+                    if second_end == np.inf:
+                        second_end = first_end
+                    merged_ranges.add((min(first_start, second_start), max(first_end, second_end)))
+
+    return merged_ranges
+
+
+
+def rule_to_human_readable(rule: List[List[List]]) -> str:
+    """
+    Convert a rule to a human-readable string.
+
+    This function takes a rule represented as a list of conditions and converts it into a human-readable string.
+    Each condition is represented as a list containing a variable, an operator, and a value.
+
+    :param rule: A list of conditions representing the rule.
+    :return: A human-readable string representing the rule.
+    """
+    attr_ranges = {}
+    relation = ""
+    # Go over each condition in the rule and extract ranges for each attribute
+    for condition in rule:
+        if len(condition) == 1:
+            relation = condition[0]
+        elif len(condition) == 3:
+            attr, op, val = condition
+            if attr not in attr_ranges.keys():
+                attr_ranges[attr] = []
+            if op == '==':
+                attr_ranges[attr] = [(val, val)]
+            elif op == '>=':
+                attr_ranges[attr].append((val, np.inf))
+            elif op == '<=':
+                attr_ranges[attr].append((-np.inf, val))
+
+    # Merge overlapping ranges for each attribute
+    attr_ranges = {k: merge_ranges(v) for k, v in attr_ranges.items()}
+    human_readable_rule = ""
+
+    # Convert the ranges to a human-readable string
+    for attr, ranges in attr_ranges.items():
+        for r in ranges:
+            start, end = r
+            if start == end:
+                human_readable_rule += f"{attr} = {start} "
+            else:
+                if start == -np.inf:
+                    human_readable_rule += f"{attr} <= {end} "
+                elif end == np.inf:
+                    human_readable_rule += f"{attr} >= {start} "
+                else:
+                    human_readable_rule += f"{r[0]} <= {attr} <= {r[1]} "
+            human_readable_rule += relation.upper() + " "
+
+    # We return up to -4 or -5 to cut off the last "and" or "or" from the string
+    if human_readable_rule.endswith("AND "):
+        return human_readable_rule[:-5]
+    elif human_readable_rule.endswith("OR "):
+        return human_readable_rule[:-4]
+    else:
+        return human_readable_rule
+
+
 
