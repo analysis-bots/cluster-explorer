@@ -199,7 +199,20 @@ def str_rule_to_list(rule: str) -> List:
         r = r.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
         r = r.split(",")
         if len(r) == 3:
-            r[2] = np.float64(r[2].replace("np.float64(", "").replace(")", ""))
+            # r[2] is the value of the condition. We strip any leading or trailing whitespace, then try to convert it to a number.
+            r[2] = r[2].strip()
+            if r[2].startswith("np.float64("):
+                r[2] = np.float64(r[2].replace("np.float64(", "").replace(")", ""))
+            elif r[2].startswith("np.int64("):
+                r[2] = np.int64(r[2].replace("np.int64(", "").replace(")", ""))
+            else:
+                try:
+                    r[2] = int(r[2])
+                except ValueError:
+                    try:
+                        r[2] = float(r[2])
+                    except ValueError:
+                        pass
             r[1] = r[1].replace(" ", "")
         rule[idx] = r
 
@@ -218,7 +231,10 @@ def merge_ranges(ranges: List[Tuple[number, number]]) -> set[Tuple[number, numbe
     """
     ranges = [r for r in ranges if len(r) == 2]
     ranges.sort()
-    merged_ranges = set()
+    merged_ranges = set(ranges)
+    # We use a separate set to keep track of ranges that need to be removed or added, to avoid modifying the set while iterating over it.
+    to_remove = set()
+    to_add = set()
     # For every range, check if it overlaps with any other range. If it does, merge the ranges.
     # We use a set to avoid duplicate ranges.
     for r in ranges:
@@ -235,13 +251,19 @@ def merge_ranges(ranges: List[Tuple[number, number]]) -> set[Tuple[number, numbe
                         second_start = first_start
                     if second_end == np.inf:
                         second_end = first_end
-                    merged_ranges.add((min(first_start, second_start), max(first_end, second_end)))
+                    # Add the merged range and remove the original ranges
+                    to_remove.add(r)
+                    to_remove.add(other_r)
+                    to_add.add((min(first_start, second_start), max(first_end, second_end)))
+
+    merged_ranges -= to_remove
+    merged_ranges |= to_add
 
     return merged_ranges
 
 
 
-def rule_to_human_readable(rule: List[List[List]]) -> str:
+def rule_to_human_readable(rule: List[List[List]], categorical_mapping: dict) -> str:
     """
     Convert a rule to a human-readable string.
 
@@ -249,6 +271,7 @@ def rule_to_human_readable(rule: List[List[List]]) -> str:
     Each condition is represented as a list containing a variable, an operator, and a value.
 
     :param rule: A list of conditions representing the rule.
+    :param categorical_mapping: A dictionary mapping one-hot encoded categorical variables to their original names.
     :return: A human-readable string representing the rule.
     """
     attr_ranges = {}
@@ -276,9 +299,23 @@ def rule_to_human_readable(rule: List[List[List]]) -> str:
     for attr, ranges in attr_ranges.items():
         for r in ranges:
             start, end = r
+            # If the start and end of the range are the same, we have an equality condition.
             if start == end:
-                human_readable_rule += f"{attr} = {start} "
+                # We need to check if the attribute is categorical and if it is, we add a condition based on the original attribute name,
+                # before the one-hot encoding.
+                if attr in categorical_mapping:
+                    attr_original = categorical_mapping[attr]
+                    attr_split = attr.split("_", 1)
+                    attr_value = attr_split[1]
+                    if start == 0:
+                        human_readable_rule += f"{attr_original} != {attr_value} "
+                    elif start == 1:
+                        human_readable_rule += f"{attr_original} == {attr_value} "
+                else:
+                    human_readable_rule += f"{attr} == {start} "
             else:
+                # If the start is -inf, we have a less than or equal condition. If the end is inf, we have a greater than or equal condition.
+                # Otherwise, we have a range condition.
                 if start == -np.inf:
                     human_readable_rule += f"{attr} <= {end} "
                 elif end == np.inf:

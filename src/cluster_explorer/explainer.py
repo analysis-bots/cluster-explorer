@@ -180,7 +180,7 @@ class Explainer:
 
         return feature_importance
 
-    def one_hot(self) -> None:
+    def one_hot(self) -> List[str]:
         """
         Perform one-hot encoding on the categorical features of the dataframe.
 
@@ -191,7 +191,7 @@ class Explainer:
         concatenated back to the dataframe, replacing the original categorical
         features.
 
-        :return: None
+        :return: The list of categorical features that were one-hot encoded.
         """
         categorical_features = self.df.select_dtypes(include=['object']).columns.tolist()
         numeric_columns = self.df.dtypes[(self.df.dtypes == "float64") | (self.df.dtypes == "int64")].index.tolist()
@@ -208,7 +208,12 @@ class Explainer:
         encoded_df = pd.DataFrame(encoded_categories, columns=enc.get_feature_names_out(categorical_features))
         self.df = pd.concat([self.df.drop(categorical_features, axis=1), encoded_df], axis=1)
 
-    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5, p_value=0):
+        # Return the list of categorical features that were one-hot encoded. This is not used in cluster-explorer itself,
+        # but it useful for outside users who may want to know which features were one-hot encoded.
+        return categorical_features
+
+    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5, p_value=0,
+                              mode='conjunctive'):
         """
         Generate explanations for all clusters in the dataset.\n
 
