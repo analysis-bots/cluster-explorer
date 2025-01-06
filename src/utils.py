@@ -32,15 +32,41 @@ def convert_interval_to_list(rule):
     return [[var, '==', value]]
 
 
-def convert_itemset_to_rules(itemsets):
+def convert_itemset_to_rules(itemsets, mode: str = 'conjunction'):
     rules = set()
     for itemset in itemsets:
         for items in itemsets[itemset]:
             explanation = []
             for item in items:
                 explanation.extend(convert_interval_to_list(item))
-            for i in range(len(explanation) - 1):
-                explanation.insert((2 * i) + 1, ['and'])
+            # With conjunction mode, we need to add 'and' between each condition
+            if mode == 'conjunction':
+                for i in range(len(explanation) - 1):
+                    explanation.insert((2 * i) + 1, ['and'])
+            # With disjunctions, we need to add "and" between conditions on the same attribute and "or" between conditions on different attributes
+            elif mode == 'disjunction':
+                fixed_explanation = []
+                flag = False
+                for i in range(len(explanation) - 1):
+                    current_cond = explanation[i]
+                    next_cond = explanation[i + 1]
+                    # If the current condition and the next condition are on the same attribute, we need to add "and" between them
+                    if current_cond[0] == next_cond[0] and not flag:
+                        fixed_explanation.append(['('])
+                        fixed_explanation.append(current_cond)
+                        fixed_explanation.append(['and'])
+                        fixed_explanation.append(next_cond)
+                        fixed_explanation.append([')'])
+                        flag = True
+                    else:
+                        fixed_explanation.append(['or'])
+                        if flag:
+                            flag = False
+                        else:
+                            fixed_explanation.append(current_cond)
+
+                explanation = fixed_explanation
+
             rules.add(tuple(tuple(e) for e in explanation))
     return [list(list(item) for item in rule) for rule in rules]
 

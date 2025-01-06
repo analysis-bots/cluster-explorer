@@ -14,26 +14,41 @@ def conciseness(rules):
     return len(attributes)
 
 
-def condition_generator(data, rules):
+def condition_generator(data, rules, mode='conjunction'):
     condition = np.zeros(len(data), dtype=bool)
     for rule in rules:
         if rule == 'or':
             continue
-        temp_condition = np.ones(len(data), dtype=bool)
+        if mode == 'conjunction':
+            temp_condition = np.ones(len(data), dtype=bool)
+        elif mode == 'disjunction':
+            temp_condition = np.zeros(len(data), dtype=bool)
         for r in rule:
             if len(r) == 3:
                 attribute, operator, value = r
                 series = data[attribute].values
-                if operator == "==":
-                    temp_condition &= (series == value)
-                elif operator == "<":
-                    temp_condition &= (series < value)
-                elif operator == "<=":
-                    temp_condition &= (series <= value)
-                elif operator == ">":
-                    temp_condition &= (series > value)
-                elif operator == ">=":
-                    temp_condition &= (series >= value)
+                if mode == 'conjunction':
+                    if operator == "==":
+                        temp_condition &= (series == value)
+                    elif operator == "<":
+                        temp_condition &= (series < value)
+                    elif operator == "<=":
+                        temp_condition &= (series <= value)
+                    elif operator == ">":
+                        temp_condition &= (series > value)
+                    elif operator == ">=":
+                        temp_condition &= (series >= value)
+                elif mode == 'disjunction':
+                    if operator == "==":
+                        temp_condition |= (series == value)
+                    elif operator == "<":
+                        temp_condition |= (series < value)
+                    elif operator == "<=":
+                        temp_condition |= (series <= value)
+                    elif operator == ">":
+                        temp_condition |= (series > value)
+                    elif operator == ">=":
+                        temp_condition |= (series >= value)
 
         condition |= temp_condition
     return condition
@@ -44,8 +59,8 @@ def support(data, class_number, rules):
     return (data.loc[condition, 'Cluster'] == class_number).sum()
 
 
-def separation_err_and_coverage(data, class_number, rules, other_classes, class_size):
-    condition = condition_generator(data, rules)
+def separation_err_and_coverage(data, class_number, rules, other_classes, class_size, mode='conjunction'):
+    condition = condition_generator(data, rules, mode)
     filter_data = data[condition]
 
     rule_support = len(filter_data)

@@ -13,6 +13,7 @@ import collections.abc
 # import multiprocessing
 from multiprocessing import Pool
 import concurrent.futures
+from dataclasses import dataclass
 
 
 @dataclass
@@ -421,6 +422,154 @@ def itemsets_from_transactions(
     # manager.remove_non_candidates(C_k)
 
     return large_itemsets, len(manager)
+
+
+@dataclass
+class Candidate:
+
+    disj_support: float
+    conj_support: float
+    itemset: frozenset
+    itemset_indices_len: float
+    closure: set
+    complement_closure: set
+
+    def __eq__(self, other):
+        return self.itemset == other.itemset
+
+
+    def __hash__(self):
+        return hash(self.itemset)
+
+
+@dataclass
+class CandidateHistory:
+
+    candidates: set
+
+    def __getitem__(self, key):
+        if not isinstance(key, frozenset):
+            key = frozenset(key)
+        # If the key is a set, return the candidate with the itemset equal to the key
+        return next(candidate for candidate in self.candidates if candidate.itemset == key)
+
+
+def dssrm_prune_step(candidates_i, L_i, candidate_history):
+    pruned_candidates = set()
+    for candidate in candidates_i:
+        candidate = Candidate(disj_support=0, conj_support=0, itemset=frozenset(candidate), closure=set(), complement_closure=set(), itemset_indices_len=len(candidate))
+        all_subsets = set(itertools.chain.from_iterable(itertools.combinations(candidate.itemset, r) for r in range(1, len(candidate.itemset))))
+        all_subsets = [candidate_history[subset] for subset in all_subsets]
+        # If all subsets are in L_i and the candidate is not in the closure of any of its subsets, add it to the pruned candidates
+        if all(subset in L_i for subset in all_subsets) and not any(candidate.itemset.issubset(subset.closure) for subset in all_subsets):
+            pruned_candidates.add(candidate)
+
+    return pruned_candidates
+
+
+def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
+        item_ancestors_dict: dict,
+        min_support: float,
+        max_length: int = 8,
+        verbosity: int = 0,
+        output_transaction_ids: bool = False,):
+    """
+    Compute the disjunctive frequent itemsets using the DSSRM algorithm.
+    The DSSRM algorithm is presented in the paper "Optimized Mining of a Concise Representation for Frequent Patterns
+    Based on Disjunctions Rather than Conjunctions" By Hamrouni et al. (2010).
+    """
+    # STEP 0 - Sanitize user inputs
+    # -----------------------------
+    if not (isinstance(min_support, numbers.Number) and (0 <= min_support <= 1)):
+        raise ValueError("`min_support` must be a number between 0 and 1.")
+
+
+    # Store in transaction manager
+    manager = TransactionManager(transactions, item_ancestors_dict)
+
+    # If no transactions are present
+    transaction_count = len(manager)
+    if transaction_count == 0:
+        return dict(), 0  # large_itemsets, num_transactions
+
+    # DSSRM considers the support as the number of transactions containing the itemset, not the frequency
+    min_support = int(min_support * transaction_count)
+
+    # EDCP - Essential Disjunctive Closed Patterns
+    edcp = set()
+    # FEP - Frequent Essential Patterns
+    fep = set()
+    # Candidate itemsets of length 1. All items are candidates at this stage.
+    candidates_i = [Candidate(disj_support=0, conj_support=0, itemset=frozenset({item}),
+                              closure=set(), complement_closure=set(),
+                              itemset_indices_len=len(indices))
+                    for item, indices in manager.indices_by_item.items()]
+    history = CandidateHistory(candidates=set(candidates_i))
+    items = set(manager.items)
+    # Replace values in the transactions with their ancestors
+    for j, transaction in enumerate(transactions):
+        for i, item in enumerate(transaction):
+            if item in item_ancestors_dict:
+                transaction[i] = frozenset({(item[0], ancestor) for ancestor in item_ancestors_dict[item]})
+        transactions[j] = frozenset(itertools.chain.from_iterable(transaction))
+
+
+    # Main loop - while there are candidates to consider
+    while len(candidates_i) > 0:
+        L_i = compute_supports_closures(transactions, min_support, candidates_i, edcp, items)
+        fep = fep.union({(candidate.itemset, candidate.disj_support) for candidate in L_i})
+        candidates_i = list(apriori_gen([candidate.itemset for candidate in L_i]))
+        candidates_i = dssrm_prune_step(candidates_i, L_i, history)
+        history.candidates = history.candidates.union(candidates_i)
+        # manager.remove_non_candidates(candidate.itemset for candidate in candidates_i)
+
+    # # We are interested in the edcp, which is the closure of all the fep
+    # edcp = edcp.union(fep)
+    # edcp = [pattern[0] for pattern in edcp]
+    # edcp = {i:
+    #     {
+    #         ((value),): len(manager.transaction_indices({value}))
+    #         for value in pattern
+    #     }
+    #     for i, pattern in enumerate(edcp)
+    # }
+
+    return_dict = {}
+    for pattern in fep:
+        pattern_len = len(pattern[0])
+        if pattern_len not in return_dict:
+            return_dict[pattern_len] = {}
+        # Convert from a frozenset to a tuple
+        pattern_items = tuple(pattern[0])
+        # The actual value is irrelevant, we only care about the key, but we need it for the expected output
+        return_dict[pattern_len][pattern_items] = 1
+
+    return return_dict, len(manager)
+
+
+
+def compute_supports_closures(transactions, min_supp, candidates, edcp, items):
+    L_i = set()
+    for transaction in transactions:
+        for candidate in candidates:
+            omega = candidate.itemset.intersection(transaction)
+            if len(omega) == 0:
+                candidate.complement_closure = candidate.complement_closure.union(transaction)
+            else:
+                candidate.disj_support += 1
+                if len(omega) == len(candidate.itemset):
+                    candidate.conj_support += 1
+
+    for candidate in candidates:
+        if candidate.conj_support >= min_supp:
+            L_i.add(candidate)
+            candidate.closure = items - candidate.complement_closure
+            edcp.add((frozenset(candidate.closure), candidate.disj_support))
+
+    return L_i
+
+
+
 
 
 if __name__ == "__main__":

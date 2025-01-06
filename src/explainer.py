@@ -108,7 +108,8 @@ class Explainer:
         encoded_df = pd.DataFrame(encoded_categories, columns=enc.get_feature_names_out(categorical_features))
         self.df = pd.concat([self.df.drop(categorical_features, axis=1), encoded_df], axis=1)
 
-    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5, p_value=0):
+    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5,
+                              p_value=0, mode='conjunction'):
         # Initialize the dataframe to store explanations for all clusters
         explanation_for_all_clusters = pd.DataFrame(columns=["coverage", "separation_err", "conciseness", "Cluster"])
 
@@ -150,11 +151,17 @@ class Explainer:
 
             max_length = int(1 / conciseness_threshold)
             # Generate frequent itemsets
-            frequent_itemsets, _ = gFIM.itemsets_from_transactions(transactions, item_ancestors_dict,
-                                                                   coverage_threshold, max_length)
+            if mode == 'conjunction':
+                frequent_itemsets, _ = gFIM.itemsets_from_transactions(transactions, item_ancestors_dict,
+                                                                       coverage_threshold, max_length)
+            elif mode == 'disjunction':
+                frequent_itemsets, _ = gFIM.dssrm(transactions, item_ancestors_dict,
+                                                                       coverage_threshold, max_length)
+            else:
+                raise ValueError("Invalid mode. Choose either 'conjunction' or 'disjunction'.")
 
             # Convert itemsets to rules
-            rules = convert_itemset_to_rules(frequent_itemsets)
+            rules = convert_itemset_to_rules(frequent_itemsets, mode=mode)
 
             # Initialize analyzer
             analyze = Analyze()
@@ -166,7 +173,7 @@ class Explainer:
             filtered_original_df['Cluster'] = self.labels
             explanation_candidates = analyze.analyze_explanation(filtered_original_df, rules, cluster_number,
                                                                  [i for i in self.labels.unique() if
-                                                                  i != cluster_number])
+                                                                  i != cluster_number], mode=mode)
 
             # Filter and refine explanations based on separation threshold and skyline operator
             explanation = explanation_candidates[explanation_candidates['separation_err'] <= separation_threshold]

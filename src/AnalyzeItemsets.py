@@ -6,13 +6,13 @@ class Analyze:
     def __init__(self):
         pass
 
-    def analyze_explanation(self, dtf, rules, cluster_number, other_clusters):
+    def analyze_explanation(self, dtf, rules, cluster_number, other_clusters, mode='conjunction'):
         rules_rec = []
         class_size = (dtf['Cluster'] == cluster_number).sum()
         for r in rules:
             rule = [r]
             separation_err, coverage = ScoreMetrics.separation_err_and_coverage(dtf, cluster_number, rule,
-                                                                                other_clusters, class_size)
+                                                                                other_clusters, class_size, mode=mode)
             rdict = {
                 "rule": str(rule),
                 "coverage": round(coverage, 2),
