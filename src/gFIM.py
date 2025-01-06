@@ -7,13 +7,15 @@ Implementations of algorithms related to itemsets.
 import itertools
 import numbers
 import typing
+from typing import Set
 import collections
 from dataclasses import field, dataclass
 import collections.abc
 # import multiprocessing
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 import concurrent.futures
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 @dataclass
@@ -259,6 +261,23 @@ def itemsets_from_transactions(
         max_length: int = 8,
         verbosity: int = 0,
         output_transaction_ids: bool = False,
+        mode: str = 'conjunction',
+):
+    if mode == 'conjunction':
+        return apriori(transactions, item_ancestors_dict, min_support, max_length, verbosity, output_transaction_ids)
+    elif mode == 'disjunction':
+        return dssrm(transactions, item_ancestors_dict, min_support, max_length, verbosity, output_transaction_ids)
+    else:
+        raise ValueError("Invalid mode. Choose either 'conjunction' or 'disjunction'.")
+
+
+def apriori(
+        transactions: typing.Iterable[typing.Union[set, tuple, list]],
+        item_ancestors_dict: dict,
+        min_support: float,
+        max_length: int = 8,
+        verbosity: int = 0,
+        output_transaction_ids: bool = False,
 ):
     """
     Compute itemsets from transactions by building the itemsets bottom up and
@@ -426,9 +445,12 @@ def itemsets_from_transactions(
 
 @dataclass
 class Candidate:
-
+    """
+    A candidate itemset in the DSSRM algorithm.
+    """
     disj_support: float
     conj_support: float
+    # We use a frozenset to ensure that the itemset is hashable.
     itemset: frozenset
     itemset_indices_len: float
     closure: set
@@ -437,14 +459,16 @@ class Candidate:
     def __eq__(self, other):
         return self.itemset == other.itemset
 
-
     def __hash__(self):
         return hash(self.itemset)
 
 
 @dataclass
 class CandidateHistory:
-
+    """
+    History of candidates in the DSSRM algorithm.
+    Used to quickly look up candidates by their itemset, to avoid recomputing closures.
+    """
     candidates: set
 
     def __getitem__(self, key):
@@ -454,35 +478,56 @@ class CandidateHistory:
         return next(candidate for candidate in self.candidates if candidate.itemset == key)
 
 
-def dssrm_prune_step(candidates_i, L_i, candidate_history):
+def dssrm_prune_step(candidates_i, L_i, candidate_history) -> Set[Candidate]:
+    """
+    The prune step of the DSSRM algorithm.
+    Prunes the candidates by removing those that don't fulfill the 2 conditions:
+    1. All subsets of the candidate are in L_i
+    2. The candidate is not in the closure of any of its subsets
+
+    :param candidates_i: The candidates to prune
+    :param L_i: The large itemsets of length i
+    :param candidate_history: The history of candidates
+
+    :return: The pruned candidates
+    """
     pruned_candidates = set()
     for candidate in candidates_i:
-        candidate = Candidate(disj_support=0, conj_support=0, itemset=frozenset(candidate), closure=set(), complement_closure=set(), itemset_indices_len=len(candidate))
-        all_subsets = set(itertools.chain.from_iterable(itertools.combinations(candidate.itemset, r) for r in range(1, len(candidate.itemset))))
+        # Convert the candidate itemset to a candidate object
+        candidate = Candidate(disj_support=0, conj_support=0, itemset=frozenset(candidate), closure=set(),
+                              complement_closure=set(), itemset_indices_len=len(candidate))
+        # Get all subsets of the candidate and look them up in the candidate history
+        all_subsets = set(itertools.chain.from_iterable(
+            itertools.combinations(candidate.itemset, r) for r in range(1, len(candidate.itemset))))
         all_subsets = [candidate_history[subset] for subset in all_subsets]
         # If all subsets are in L_i and the candidate is not in the closure of any of its subsets, add it to the pruned candidates
-        if all(subset in L_i for subset in all_subsets) and not any(candidate.itemset.issubset(subset.closure) for subset in all_subsets):
+        if all(subset in L_i for subset in all_subsets) and not any(
+                candidate.itemset.issubset(subset.closure) for subset in all_subsets):
             pruned_candidates.add(candidate)
 
     return pruned_candidates
 
 
 def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
-        item_ancestors_dict: dict,
-        min_support: float,
-        max_length: int = 8,
-        verbosity: int = 0,
-        output_transaction_ids: bool = False,):
+          item_ancestors_dict: dict,
+          min_support: float,
+          max_length: int = 8,
+          *args, **kwargs) -> typing.Tuple[dict, int]:
     """
     Compute the disjunctive frequent itemsets using the DSSRM algorithm.
     The DSSRM algorithm is presented in the paper "Optimized Mining of a Concise Representation for Frequent Patterns
     Based on Disjunctions Rather than Conjunctions" By Hamrouni et al. (2010).
+
+    :param transactions: The transactions to mine
+    :param item_ancestors_dict: A dictionary containing the ancestors of each item
+    :param min_support: The minimum support of the itemsets, i.e. the minimum frequency as a percentage.
+    :param max_length: The maximum length of the itemsets.
+
+    :return: A dictionary containing the frequent itemsets and the number of transactions
     """
-    # STEP 0 - Sanitize user inputs
-    # -----------------------------
+    # Sanitize user inputs
     if not (isinstance(min_support, numbers.Number) and (0 <= min_support <= 1)):
         raise ValueError("`min_support` must be a number between 0 and 1.")
-
 
     # Store in transaction manager
     manager = TransactionManager(transactions, item_ancestors_dict)
@@ -510,36 +555,49 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     for j, transaction in enumerate(transactions):
         for i, item in enumerate(transaction):
             if item in item_ancestors_dict:
+                # We use frozensets to ensure that the itemset is hashable and thus quickly looked up
                 transaction[i] = frozenset({(item[0], ancestor) for ancestor in item_ancestors_dict[item]})
         transactions[j] = frozenset(itertools.chain.from_iterable(transaction))
 
+    next_pattern_len = 1
 
-    # Main loop - while there are candidates to consider
-    while len(candidates_i) > 0:
-        L_i = compute_supports_closures(transactions, min_support, candidates_i, edcp, items)
+    num_cores = cpu_count()
+
+    # Main loop - while there are candidates to consider and the pattern length is less than or equal to the max length
+    while len(candidates_i) > 0 and next_pattern_len <= max_length:
+        candidates_i = list(candidates_i)
+        candidates_chunks = [candidates_i[i::num_cores] for i in range(num_cores)]
+        # Compute the supports and closures of the candidates in parallel
+        L_i = set()
+        with ThreadPoolExecutor(max_workers=num_cores) as executor:
+            futures = [executor.submit(compute_supports_closures, transactions, min_support, candidates_chunk, edcp, items)
+                       for candidates_chunk in candidates_chunks]
+            for future in as_completed(futures):
+                L_i = L_i.union(future.result())
+        # Add the candidates to the Frequent Essential Patterns
         fep = fep.union({(candidate.itemset, candidate.disj_support) for candidate in L_i})
-        candidates_i = list(apriori_gen([candidate.itemset for candidate in L_i]))
+        # Generate and prune the next candidates. These are passed as a list of tuples to better match the expected input,
+        # but it should work just as well as a list of frozensets.
+        candidates_i = list(apriori_gen([tuple(candidate.itemset) for candidate in L_i]))
         candidates_i = dssrm_prune_step(candidates_i, L_i, history)
+        # Save the candidates in the history and increment the pattern length
         history.candidates = history.candidates.union(candidates_i)
-        # manager.remove_non_candidates(candidate.itemset for candidate in candidates_i)
+        next_pattern_len += 1
 
-    # # We are interested in the edcp, which is the closure of all the fep
-    # edcp = edcp.union(fep)
-    # edcp = [pattern[0] for pattern in edcp]
-    # edcp = {i:
-    #     {
-    #         ((value),): len(manager.transaction_indices({value}))
-    #         for value in pattern
-    #     }
-    #     for i, pattern in enumerate(edcp)
-    # }
+    # edcp contains the closures of the frequent essential patterns.
+    # In the paper, they show that the full representation of the disjunctive patterns is given by the union of
+    # edcp and fep. However, the closures can be massive, so we only take the closures that are of length <= max_length.
+    # This may leave edcp empty, but we still get some patterns via fep.
+    edcp = {pattern[0] for pattern in edcp if len(pattern[0]) <= max_length}
+    fep = fep.union(edcp)
 
+    # Convert the frequent essential patterns to the expected output format
     return_dict = {}
     for pattern in fep:
         pattern_len = len(pattern[0])
         if pattern_len not in return_dict:
             return_dict[pattern_len] = {}
-        # Convert from a frozenset to a tuple
+        # Convert from a tuple with a frozenset in it in the 0 index to a tuple
         pattern_items = tuple(pattern[0])
         # The actual value is irrelevant, we only care about the key, but we need it for the expected output
         return_dict[pattern_len][pattern_items] = 1
@@ -547,19 +605,36 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     return return_dict, len(manager)
 
 
+def compute_supports_closures(transactions, min_supp, candidates, edcp, items) -> Set[Candidate]:
+    """
+    The support computation step of the DSSRM algorithm.
+    Computes the closure, disjunctive support, and conjunctive support of the candidates, keeping only
+    those that have a support greater than or equal to the minimum support.
 
-def compute_supports_closures(transactions, min_supp, candidates, edcp, items):
+    :param transactions: The transactions to mine
+    :param min_supp: The minimum support of the itemsets, i.e. the minimum frequency as a percentage.
+    :param candidates: The candidates to compute the support of
+    :param edcp: The set of Essential Disjunctive Closed Patterns
+    :param items: The set of all items
+
+    :return: The large itemsets of length i
+    """
     L_i = set()
     for transaction in transactions:
         for candidate in candidates:
+            # Omega is the intersection of the candidate itemset and the transaction. This is the name used in the paper.
             omega = candidate.itemset.intersection(transaction)
+            # If the intersection is empty, the transaction is a subset of the complement of the candidate itemset's closure
             if len(omega) == 0:
                 candidate.complement_closure = candidate.complement_closure.union(transaction)
+            # Otherwise, the transaction has a non-empty intersection with the candidate itemset, and we update the supports
             else:
                 candidate.disj_support += 1
                 if len(omega) == len(candidate.itemset):
                     candidate.conj_support += 1
 
+    # For each candidate, if its conjunctive support is greater than or equal to the minimum support, add it to L_i.
+    # Compute the closure of the candidate and add it to edcp as well.
     for candidate in candidates:
         if candidate.conj_support >= min_supp:
             L_i.add(candidate)
@@ -567,9 +642,6 @@ def compute_supports_closures(transactions, min_supp, candidates, edcp, items):
             edcp.add((frozenset(candidate.closure), candidate.disj_support))
 
     return L_i
-
-
-
 
 
 if __name__ == "__main__":

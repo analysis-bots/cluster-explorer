@@ -151,14 +151,8 @@ class Explainer:
 
             max_length = int(1 / conciseness_threshold)
             # Generate frequent itemsets
-            if mode == 'conjunction':
-                frequent_itemsets, _ = gFIM.itemsets_from_transactions(transactions, item_ancestors_dict,
-                                                                       coverage_threshold, max_length)
-            elif mode == 'disjunction':
-                frequent_itemsets, _ = gFIM.dssrm(transactions, item_ancestors_dict,
-                                                                       coverage_threshold, max_length)
-            else:
-                raise ValueError("Invalid mode. Choose either 'conjunction' or 'disjunction'.")
+            frequent_itemsets, _ = gFIM.itemsets_from_transactions(transactions, item_ancestors_dict,
+                                                                       coverage_threshold, max_length, mode=mode)
 
             # Convert itemsets to rules
             rules = convert_itemset_to_rules(frequent_itemsets, mode=mode)
