@@ -16,6 +16,8 @@ from multiprocessing import Pool, cpu_count
 import concurrent.futures
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from black.trans import defaultdict
 from multiset import Multiset
 
 
@@ -479,25 +481,45 @@ class CandidateHistory:
         return next(candidate for candidate in self.candidates if candidate.itemset == key)
 
 
-@dataclass
 class LookupTransactionsTable:
     """
     A lookup table for transactions.
     Used to quickly look up transactions that contain a certain itemset, or do not contain a certain itemset.
     """
-    transactions: list[set]
+
+    def __init__(self, transactions):
+        # Get all of the unique items in the transactions
+        keys = set(itertools.chain.from_iterable(transactions))
+        self.transaction_dict = defaultdict(set)
+        for key in keys:
+            self.transaction_dict[key] = set()
+        # Populate the transaction dictionary, so that we can quickly look up transactions that contain an item
+        for transaction in transactions:
+            for key in transaction:
+                self.transaction_dict[key].add(transaction)
+        # Store all transactions in a set, for quick set operations
+        self._all_transactions = set(transactions)
 
     def __getitem__(self, key):
-        if not isinstance(key, frozenset):
-            key = frozenset(key)
-        # If the key is a set, return all transactions that contain the key
-        return [transaction for transaction in self.transactions if key.issubset(transaction)]
+        """
+        Get all transactions that have a non-empty intersection with the key.
+        """
+        if not isinstance(key, tuple):
+            key = tuple(key)
+        ret_values = set()
+        for item in key:
+            ret_values.update(self.transaction_dict[item])
+        return ret_values
 
     def get_non_subsets(self, key):
-        if not isinstance(key, frozenset):
-            key = frozenset(key)
-        # If the key is a set, return all transactions that do not contain the key
-        return [transaction for transaction in self.transactions if not key.issubset(transaction)]
+        """
+        Get all transactions that have an empty intersection with the key.
+        """
+        if not isinstance(key, tuple):
+            key = tuple(key)
+        # Assuming len(key) << len(transactions), doing the inverse of getitem is faster than iterating over all transactions
+        containing_transactions = self[key]
+        return self._all_transactions - containing_transactions
 
 
 def dssrm_prune_step(candidates_i, L_i, candidate_history) -> Set[Candidate]:
@@ -595,10 +617,8 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     while len(candidates_i) > 0 and next_pattern_len <= max_length:
         candidates_i = list(candidates_i)
         candidates_chunks = [candidates_i[i::num_cores] for i in range(num_cores)]
+
         # Compute the supports and closures of the candidates in parallel.
-        # On small datasets, this seems to be as fast (or possibly very slightly slower, the difference was measured in milliseconds)
-        # as doing it sequentially.
-        # On larger datasets, while untested, it should probably produce a speedup.
         L_i = set()
         with ThreadPoolExecutor(max_workers=num_cores) as executor:
             futures = [
@@ -663,9 +683,9 @@ def compute_supports_closures(transactions, min_supp, candidates, edcp, items, l
         omega = transactions.intersection(candidate.itemset)
         # Any transaction that does not, in any way, intersect with the candidate is a subset of the complement of the candidate's closure
         # Thus, we add all of the items from those transactions to the complement closure
-        # Despite the iteration, as this is done using set operations, it is very fast, much faster iterating over the transactions.
         candidate.complement_closure = candidate.complement_closure.union(
-            set([transaction for transaction in lookup_table.get_non_subsets(candidate.itemset)]))
+            itertools.chain.from_iterable(lookup_table.get_non_subsets(candidate.itemset))
+        )
 
         if len(omega) != 0:
             multiplicities = [transactions.get(item, 0) for item in omega]
