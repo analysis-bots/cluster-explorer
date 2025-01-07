@@ -16,6 +16,7 @@ from multiprocessing import Pool, cpu_count
 import concurrent.futures
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from multiset import Multiset
 
 
 @dataclass
@@ -478,6 +479,27 @@ class CandidateHistory:
         return next(candidate for candidate in self.candidates if candidate.itemset == key)
 
 
+@dataclass
+class LookupTransactionsTable:
+    """
+    A lookup table for transactions.
+    Used to quickly look up transactions that contain a certain itemset, or do not contain a certain itemset.
+    """
+    transactions: list[set]
+
+    def __getitem__(self, key):
+        if not isinstance(key, frozenset):
+            key = frozenset(key)
+        # If the key is a set, return all transactions that contain the key
+        return [transaction for transaction in self.transactions if key.issubset(transaction)]
+
+    def get_non_subsets(self, key):
+        if not isinstance(key, frozenset):
+            key = frozenset(key)
+        # If the key is a set, return all transactions that do not contain the key
+        return [transaction for transaction in self.transactions if not key.issubset(transaction)]
+
+
 def dssrm_prune_step(candidates_i, L_i, candidate_history) -> Set[Candidate]:
     """
     The prune step of the DSSRM algorithm.
@@ -559,6 +581,12 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
                 transaction[i] = frozenset({(item[0], ancestor) for ancestor in item_ancestors_dict[item]})
         transactions[j] = frozenset(itertools.chain.from_iterable(transaction))
 
+    transactions_lookup = LookupTransactionsTable(transactions=transactions)
+    # Create a single large multi-set of all transactions.
+    # Computing the supports, in the paper, is done by iterating over the transactions.
+    # Using a multi-set allows us to avoid iterating over the transactions, getting a massive speedup (approx x3 as fast).
+    transactions = Multiset(itertools.chain.from_iterable(transactions))
+
     next_pattern_len = 1
 
     num_cores = cpu_count()
@@ -567,13 +595,19 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     while len(candidates_i) > 0 and next_pattern_len <= max_length:
         candidates_i = list(candidates_i)
         candidates_chunks = [candidates_i[i::num_cores] for i in range(num_cores)]
-        # Compute the supports and closures of the candidates in parallel
+        # Compute the supports and closures of the candidates in parallel.
+        # On small datasets, this seems to be as fast (or possibly very slightly slower, the difference was measured in milliseconds)
+        # as doing it sequentially.
+        # On larger datasets, while untested, it should probably produce a speedup.
         L_i = set()
         with ThreadPoolExecutor(max_workers=num_cores) as executor:
-            futures = [executor.submit(compute_supports_closures, transactions, min_support, candidates_chunk, edcp, items)
-                       for candidates_chunk in candidates_chunks]
+            futures = [
+                executor.submit(compute_supports_closures, transactions, min_support, candidates_chunk, edcp, items,
+                                transactions_lookup)
+                for candidates_chunk in candidates_chunks]
             for future in as_completed(futures):
                 L_i = L_i.union(future.result())
+
         # Add the candidates to the Frequent Essential Patterns
         fep = fep.union({(candidate.itemset, candidate.disj_support) for candidate in L_i})
         # Generate and prune the next candidates. These are passed as a list of tuples to better match the expected input,
@@ -605,7 +639,7 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     return return_dict, len(manager)
 
 
-def compute_supports_closures(transactions, min_supp, candidates, edcp, items) -> Set[Candidate]:
+def compute_supports_closures(transactions, min_supp, candidates, edcp, items, lookup_table) -> Set[Candidate]:
     """
     The support computation step of the DSSRM algorithm.
     Computes the closure, disjunctive support, and conjunctive support of the candidates, keeping only
@@ -616,22 +650,31 @@ def compute_supports_closures(transactions, min_supp, candidates, edcp, items) -
     :param candidates: The candidates to compute the support of
     :param edcp: The set of Essential Disjunctive Closed Patterns
     :param items: The set of all items
+    :param lookup_table: A lookup table for the transactions, allowing for quick lookups of transactions containing or not containing an itemset
 
     :return: The large itemsets of length i
     """
     L_i = set()
-    for transaction in transactions:
-        for candidate in candidates:
-            # Omega is the intersection of the candidate itemset and the transaction. This is the name used in the paper.
-            omega = candidate.itemset.intersection(transaction)
-            # If the intersection is empty, the transaction is a subset of the complement of the candidate itemset's closure
-            if len(omega) == 0:
-                candidate.complement_closure = candidate.complement_closure.union(transaction)
-            # Otherwise, the transaction has a non-empty intersection with the candidate itemset, and we update the supports
-            else:
-                candidate.disj_support += 1
-                if len(omega) == len(candidate.itemset):
-                    candidate.conj_support += 1
+    # The original algorithm iterates over the transactions and the candidates, but we can get a massive speedup
+    # by using a multi-set of all transactions instead.
+    # The iterations are replaced by set operations, which are much faster.
+    for candidate in candidates:
+        # Omega is the intersection of the candidate itemset and the transaction. This is the name used in the paper.
+        omega = transactions.intersection(candidate.itemset)
+        # Any transaction that does not, in any way, intersect with the candidate is a subset of the complement of the candidate's closure
+        # Thus, we add all of the items from those transactions to the complement closure
+        # Despite the iteration, as this is done using set operations, it is very fast, much faster iterating over the transactions.
+        candidate.complement_closure = candidate.complement_closure.union(
+            set([transaction for transaction in lookup_table.get_non_subsets(candidate.itemset)]))
+
+        if len(omega) != 0:
+            multiplicities = [transactions.get(item, 0) for item in omega]
+            # The disjunctive support is updated to the maximum number of occurrences of any item in the intersection
+            candidate.disj_support += max(multiplicities)
+            if len(omega) == len(candidate.itemset):
+                # The conjunctive support is updated to the minimum number of occurrences of any item in the intersection
+                # Aka the number of transactions containing the candidate in full
+                candidate.conj_support += min(multiplicities)
 
     # For each candidate, if its conjunctive support is greater than or equal to the minimum support, add it to L_i.
     # Compute the closure of the candidate and add it to edcp as well.
