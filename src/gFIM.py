@@ -9,17 +9,13 @@ import numbers
 import typing
 from typing import Set
 import collections
-from dataclasses import field, dataclass
+from dataclasses import field
 import collections.abc
-# import multiprocessing
 from multiprocessing import Pool, cpu_count
 import concurrent.futures
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 import pandas as pd
-from black.trans import defaultdict
-from multiset import Multiset
 import numpy as np
 
 
@@ -531,7 +527,7 @@ def candidates_to_matrix(candidates: typing.Iterable[Candidate], item_indexes: d
 def compute_supports_closures(transactions_matrix: np.ndarray, candidates_matrix: np.ndarray,
                               candidates: list[Candidate] | np.ndarray, min_supp: int,
                               candidate_length: int, transaction_indexes_series: pd.Series,
-                              items: set[tuple], edcp: set[tuple]) -> Set[Candidate]:
+                              items: set[tuple], edcp: set) -> Set[Candidate]:
     """
     The support computation step of the DSSRM algorithm.
     Computes the closure, disjunctive support, and conjunctive support of the candidates, keeping only
@@ -564,7 +560,8 @@ def compute_supports_closures(transactions_matrix: np.ndarray, candidates_matrix
     conj_supports = np.sum(intersection_matrix == candidate_length, axis=1)
     # Get the indexes of the candidates that have a conjunctive support greater than or equal to the minimum support
     candidate_indexes = np.argwhere(conj_supports >= min_supp).reshape(-1)
-    # For each of those candidates, compute the complement closure and the closure
+    # For each of those candidates, compute the complement closure and the closure, and add them to the large itemsets
+    # and their closures to the set of essential disjunctive closed patterns.
     for idx in candidate_indexes:
         candidate = candidates[idx]
         # Get the indices where the intersection matrix is 0, i.e. the transactions that do not contain the i-th candidate.
@@ -575,7 +572,8 @@ def compute_supports_closures(transactions_matrix: np.ndarray, candidates_matrix
         candidate.complement_closure = candidate.complement_closure.union(*transactions)
         candidate.closure = items - candidate.complement_closure
         L_i.add(candidate)
-        edcp.add((frozenset(candidate.closure), candidate.disj_support))
+        # We use frozensets because we need a hashable object to store in a set
+        edcp.add(frozenset(candidate.closure))
 
     return L_i
 
@@ -639,8 +637,8 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     # using matrix multiplication, instead of iterating over sets.
     # For reference, from testing on the wine dataset with min_support of 0.8 and 3 clusters,
     # the amount of time spent on the main loop across all clusters:
-    # Original algorithm, iterating over both transactions and candidates: ~6s
-    # First optimization attempt, using multisets and lookup tables: ~4-5s (implementation in previous commits)
+    # Original algorithm, iterating over both transactions and candidates: ~5-6s
+    # First optimization attempt, using multisets and lookup tables: ~3-5s (implementation in previous commits)
     # Second optimization attempt, using matrix multiplication: ~0.1s
     for j, transaction in enumerate(transactions):
         for item in transaction:
@@ -706,7 +704,7 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     # In the paper, they show that the full representation of the disjunctive patterns is given by the union of
     # edcp and fep. However, the closures can be massive, so we only take the closures that are of length <= max_length.
     # This may leave edcp empty, but we still get some patterns via fep.
-    edcp = {pattern[0] for pattern in edcp if len(pattern[0]) <= max_length}
+    edcp = {pattern for pattern in edcp if len(pattern) <= max_length}
     fep = fep.union(edcp)
 
     # Convert the frequent essential patterns to the expected output format
