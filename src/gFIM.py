@@ -658,9 +658,12 @@ def dssrm(transactions: List[typing.Union[set, tuple, list]],
     # Initialize the history of candidates
     history = CandidateHistory(candidates=set(candidates_i))
 
+    # The length of the current pattern. We start at 1, since the first candidates are of length 1.
+    current_candidate_len = 1
     # The length of the next candidates to consider. We start at 2, since the first candidates are of length 1,
     # and the first iteration will thus generate candidates of length 2.
     next_candidates_len = 2
+
 
     num_cores = cpu_count()
 
@@ -682,7 +685,7 @@ def dssrm(transactions: List[typing.Union[set, tuple, list]],
                                 candidates_matrix=candidates_matrix_rows[i],
                                 candidates=candidates_chunks[i],
                                 min_supp=min_support,
-                                candidate_length=next_candidates_len,
+                                candidate_length=current_candidate_len,
                                 transaction_indexes_series=transaction_series,
                                 items=items,
                                 edcp=edcp
@@ -705,6 +708,7 @@ def dssrm(transactions: List[typing.Union[set, tuple, list]],
         candidates_matrix = candidates_to_matrix(candidates_i, transaction_keys_indexes)
         # Save the candidates in the history and increment the pattern length
         history.candidates = history.candidates.union(candidates_i)
+        current_candidate_len = next_candidates_len
         next_candidates_len += 1
 
     # edcp contains the closures of the frequent essential patterns.
