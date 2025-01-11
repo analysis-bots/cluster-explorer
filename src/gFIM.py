@@ -7,7 +7,7 @@ Implementations of algorithms related to itemsets.
 import itertools
 import numbers
 import typing
-from typing import Set
+from typing import Set, List
 import collections
 from dataclasses import field
 import collections.abc
@@ -478,7 +478,7 @@ class CandidateHistory:
         return next(candidate for candidate in self.candidates if candidate.itemset == key)
 
 
-def dssrm_prune_step(candidates_i, L_i, candidate_history) -> Set[Candidate]:
+def dssrm_prune_step(candidates_i: List, L_i: Set[Candidate], candidate_history: CandidateHistory) -> Set[Candidate]:
     """
     The prune step of the DSSRM algorithm.
     Prunes the candidates by removing those that don't fulfill the 2 conditions:
@@ -508,12 +508,12 @@ def dssrm_prune_step(candidates_i, L_i, candidate_history) -> Set[Candidate]:
     return pruned_candidates
 
 
-def candidates_to_matrix(candidates: typing.Iterable[Candidate], item_indexes: dict) -> np.ndarray:
+def candidates_to_matrix(candidates: Set[Candidate] | List[Candidate], item_indexes: dict) -> np.ndarray:
     """
     Convert the candidates to a C x I matrix, where C is the number of candidates and I is the number of items.
 
     :param candidates: The candidates to convert
-    :param transaction_keys_indexes: A dictionary containing the indexes of the items
+    :param item_indexes: A dictionary containing the indexes of the items
 
     :return: A C x I matrix where each row is a 1-hot encoded vector of the candidate
     """
@@ -578,7 +578,7 @@ def compute_supports_closures(transactions_matrix: np.ndarray, candidates_matrix
     return L_i
 
 
-def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
+def dssrm(transactions: List[typing.Union[set, tuple, list]],
           item_ancestors_dict: dict,
           min_support: float,
           max_length: int = 8,
@@ -636,7 +636,7 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     # We do this because computing the intersections between the transactions and the candidates is much faster
     # using matrix multiplication, instead of iterating over sets.
     # For reference, from testing on the wine dataset with min_support of 0.8 and 3 clusters,
-    # the amount of time spent on the main loop across all clusters:
+    # the amount of time spent on the algorithm across all clusters was:
     # Original algorithm, iterating over both transactions and candidates: ~5-6s
     # First optimization attempt, using multisets and lookup tables: ~3-5s (implementation in previous commits)
     # Second optimization attempt, using matrix multiplication: ~0.1s
@@ -658,12 +658,14 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     # Initialize the history of candidates
     history = CandidateHistory(candidates=set(candidates_i))
 
-    next_pattern_len = 1
+    # The length of the next candidates to consider. We start at 2, since the first candidates are of length 1,
+    # and the first iteration will thus generate candidates of length 2.
+    next_candidates_len = 2
 
     num_cores = cpu_count()
 
     # Main loop - while there are candidates to consider and the pattern length is less than or equal to the max length
-    while len(candidates_i) > 0 and next_pattern_len <= max_length:
+    while len(candidates_i) > 0:
         # Prepare the candidates for parallel processing
         candidates_i = np.array(list(candidates_i))
         candidates_chunks_indexes = np.array_split(np.arange(len(candidates_i)), num_cores)
@@ -680,7 +682,7 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
                                 candidates_matrix=candidates_matrix_rows[i],
                                 candidates=candidates_chunks[i],
                                 min_supp=min_support,
-                                candidate_length=next_pattern_len,
+                                candidate_length=next_candidates_len,
                                 transaction_indexes_series=transaction_series,
                                 items=items,
                                 edcp=edcp
@@ -691,6 +693,11 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
 
         # Add the candidates to the Frequent Essential Patterns
         fep = fep.union({(candidate.itemset, candidate.disj_support) for candidate in L_i})
+
+        # Break out if we are about to generate candidates of length greater than the max length
+        if next_candidates_len >= max_length:
+            break
+
         # Generate and prune the next candidates. These are passed as a list of tuples to better match the expected input,
         # but it should work just as well as a list of frozensets.
         candidates_i = list(apriori_gen([tuple(candidate.itemset) for candidate in L_i]))
@@ -698,7 +705,7 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
         candidates_matrix = candidates_to_matrix(candidates_i, transaction_keys_indexes)
         # Save the candidates in the history and increment the pattern length
         history.candidates = history.candidates.union(candidates_i)
-        next_pattern_len += 1
+        next_candidates_len += 1
 
     # edcp contains the closures of the frequent essential patterns.
     # In the paper, they show that the full representation of the disjunctive patterns is given by the union of
@@ -710,13 +717,13 @@ def dssrm(transactions: typing.Iterable[typing.Union[set, tuple, list]],
     # Convert the frequent essential patterns to the expected output format
     return_dict = {}
     for pattern in fep:
-        pattern_len = len(pattern[0])
-        if pattern_len not in return_dict:
-            return_dict[pattern_len] = {}
+        next_candidates_len = len(pattern[0])
+        if next_candidates_len not in return_dict:
+            return_dict[next_candidates_len] = {}
         # Convert from a tuple with a frozenset in it in the 0 index to a tuple
         pattern_items = tuple(pattern[0])
         # The actual value is irrelevant, we only care about the key, but we need it for the expected output
-        return_dict[pattern_len][pattern_items] = 1
+        return_dict[next_candidates_len][pattern_items] = 1
 
     return return_dict, len(manager)
 
