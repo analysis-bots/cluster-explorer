@@ -28,11 +28,51 @@ def conciseness(rules: Iterable[Iterable[Tuple | List]]) -> float | int:
     return len(attributes)
 
 
-def condition_generator(data: DataFrame, rules: Iterable[Iterable[Tuple | List]]) -> np.ndarray:
+def condition_writer(data, rule, temp_condition, mode='conjunction'):
+    """
+    This function writes the condition to filter the data based on the rule provided.
+
+    :param data: The data to be filtered
+    :param rule: The rule to be applied
+    :param temp_condition: The current condition
+    :param mode: The mode of the rule (conjunction or disjunction)
+
+    :return: The updated condition
+    """
+    attribute, operator, value = rule
+    series = data[attribute].values
+    if mode == 'conjunction':
+        if operator == "==":
+            temp_condition &= (series == value)
+        elif operator == "<":
+            temp_condition &= (series < value)
+        elif operator == "<=":
+            temp_condition &= (series <= value)
+        elif operator == ">":
+            temp_condition &= (series > value)
+        elif operator == ">=":
+            temp_condition &= (series >= value)
+    elif mode == 'disjunction':
+        if operator == "==":
+            temp_condition |= (series == value)
+        elif operator == "<":
+            temp_condition |= (series < value)
+        elif operator == "<=":
+            temp_condition |= (series <= value)
+        elif operator == ">":
+            temp_condition |= (series > value)
+        elif operator == ">=":
+            temp_condition |= (series >= value)
+
+    return temp_condition
+
+
+def condition_generator(data: DataFrame, rules: Iterable[Iterable[Tuple | List]], mode: str = 'conjunction') -> np.ndarray:
     """
     Generate a condition based on a set of rules.\n
     :param data: The data the rules are applied to
     :param rules: A set of rules. Example of a rule: [('alcohol', '>', 10), ('and'), ('pH', '<', 3)]
+    :param mode: Whether the rules are conjunctions or disjunctions.
     :return: A boolean array of the same length as the data, where True indicates that the data-point satisfies the rules
     and False indicates that the data-point does not satisfy the rules
     """
@@ -41,23 +81,28 @@ def condition_generator(data: DataFrame, rules: Iterable[Iterable[Tuple | List]]
     for rule in rules:
         if rule == 'or':
             continue
-        # Create a temporary condition array of all True
-        temp_condition = np.ones(len(data), dtype=bool)
+        # Create a temporary condition array of all True or all False based on the mode
+        if mode == 'conjunction':
+            temp_condition = np.ones(len(data), dtype=bool)
+        elif mode == 'disjunction':
+            temp_condition = np.zeros(len(data), dtype=bool)
+        and_flag = False
         for r in rule:
-            # For every valid rule, apply the condition to the data
-            if len(r) == 3:
-                attribute, operator, value = r
-                series = data[attribute].values
-                if operator == "==":
-                    temp_condition &= (series == value)
-                elif operator == "<":
-                    temp_condition &= (series < value)
-                elif operator == "<=":
-                    temp_condition &= (series <= value)
-                elif operator == ">":
-                    temp_condition &= (series > value)
-                elif operator == ">=":
-                    temp_condition &= (series >= value)
+            if len(r) == 3 and and_flag:
+                inner_condition = condition_writer(data, r, inner_condition, "conjunction")
+            # The usual case. We write the condition based on the rule.
+            # This case is always true when the mode is conjunction.
+            elif len(r) == 3 and not and_flag:
+                temp_condition = condition_writer(data, r, temp_condition, mode)
+            # If the rule is a disjunction rule, we need to handle the brackets that are used to group ranges.
+            # We raise a flag when we encounter an opening bracket and we keep track of the condition inside the brackets.
+            elif r == ["("] and (mode == 'disjunction' or and_flag):
+                and_flag = True
+                inner_condition = np.ones(len(data), dtype=bool)
+            # If we encounter a closing bracket, we apply the condition inside the brackets to the current condition.
+            elif r == [")"] and (mode == 'disjunction' or and_flag):
+                and_flag = False
+                temp_condition |= inner_condition
 
         # Combine the temporary condition with the main condition
         condition |= temp_condition
@@ -70,7 +115,7 @@ def support(data, class_number, rules):
 
 
 def separation_err_and_coverage(data: DataFrame, class_number: int, rules: Iterable[Iterable[Tuple | List]],
-                                other_classes: List[int], class_size: int) -> Tuple[float, float]:
+                                other_classes: List[int], class_size: int, mode: str='conjunction') -> Tuple[float, float]:
     """
     Compute the separation error and coverage of a set of rules.\n
     The separation error is defined as:\n
@@ -90,6 +135,7 @@ def separation_err_and_coverage(data: DataFrame, class_number: int, rules: Itera
     :param rules: A set of rules
     :param other_classes: The set of all cluster labels without :math:`c` - :math:`C - \{c\}`
     :param class_size: The size of the class :math:`|\{x \in X | CL(x) = c\}|`
+    :param mode: Whether the rules should be applied as conjunctions or disjunctions.
     :return: The separation error and coverage of the rules
     """
     # Generate a condition based on the rules, and apply it to the data

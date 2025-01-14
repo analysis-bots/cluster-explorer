@@ -14,7 +14,8 @@ class Analyze:
     def __init__(self):
         pass
 
-    def analyze_explanation(self, dtf: DataFrame, rules: List[List[List[str | float]]], cluster_number: int, other_clusters: List[int]) -> DataFrame:
+    def analyze_explanation(self, dtf: DataFrame, rules: List[List[List[str | float]]], cluster_number: int,
+                            other_clusters: List[int], mode='conjunction') -> DataFrame:
         """
         Analyze the explanation of rules for a specific cluster.\n
 
@@ -26,6 +27,7 @@ class Analyze:
         :param rules: A list of rules, where each rule is a list of conditions.
         :param cluster_number: The cluster number for which the rules are being analyzed.
         :param other_clusters: A list of other cluster numbers to compare against.
+        :param mode: Whether the rules are conjunctions or disjunctions.
         :return: A DataFrame containing the rules and their corresponding metrics: coverage, separation error, and conciseness.
         """
         rules_rec = []
@@ -35,7 +37,7 @@ class Analyze:
             # Compute and store the metrics for each rule
             rule = [r]
             separation_err, coverage = ScoreMetrics.separation_err_and_coverage(dtf, cluster_number, rule,
-                                                                                other_clusters, class_size)
+                                                                                other_clusters, class_size, mode=mode)
             rdict = {
                 "rule": str(rule),
                 "coverage": round(coverage, 2),

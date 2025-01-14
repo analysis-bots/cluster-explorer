@@ -84,7 +84,7 @@ def convert_interval_to_list(rule: Tuple[str, number | Tuple[number, number]]) -
     return [[var, '==', value]]
 
 
-def convert_itemset_to_rules(itemsets: dict) -> List[List[List]]:
+def convert_itemset_to_rules(itemsets: dict, mode: str = 'conjunction') -> List[List[List]]:
     """
     Convert itemsets into a list of rules.\n
 
@@ -93,19 +93,46 @@ def convert_itemset_to_rules(itemsets: dict) -> List[List[List]]:
     a variable, an operator, and a value. The rules are then returned as a list of lists of lists.
 
     :param itemsets: A dictionary where keys are itemset identifiers and values are lists of itemsets.
+    :param mode: The mode of the rules. If 'conjunction', 'and' is used between conditions. If 'disjunction', 'or' is used between conditions.
     :return: A list of rules, where each rule is a list of conditions.
     """
     rules = set()
     for itemset in itemsets:
         for items in itemsets[itemset]:
             explanation = []
-            # Each item in the itemset is a tuple of (attribute, value). We convert this to a list of conditions and add
-            # that to the explanation list.
+            # First, we convert each interval in the itemset to a list of conditions
             for item in items:
                 explanation.extend(convert_interval_to_list(item))
-            # Add a conditional between each condition in the explanation
-            for i in range(len(explanation) - 1):
-                explanation.insert((2 * i) + 1, ['and'])
+            # With conjunction mode, we need to add 'and' between each condition in the explanation
+            if mode == 'conjunction':
+                for i in range(len(explanation) - 1):
+                    explanation.insert((2 * i) + 1, ['and'])
+
+            # With disjunctions, we need to account for conditions on the same attribute that represent a range.
+            # These conditions need to be grouped together with 'and' between them, and 'or' between conditions on different attributes
+            # or different ranges on the same attribute.
+            elif mode == 'disjunction':
+                fixed_explanation = []
+                flag = False
+                for i in range(len(explanation) - 1):
+                    current_cond = explanation[i]
+                    next_cond = explanation[i + 1]
+                    # If the current condition and the next condition are on the same attribute and represent a range, we group them together
+                    if current_cond[0] == next_cond[0] and not flag and (current_cond[1] == ">=" or current_cond[1] == "<="):
+                        fixed_explanation.append(['('])
+                        fixed_explanation.append(current_cond)
+                        fixed_explanation.append(['and'])
+                        fixed_explanation.append(next_cond)
+                        fixed_explanation.append([')'])
+                        flag = True
+                    else:
+                        fixed_explanation.append(['or'])
+                        if flag:
+                            flag = False
+                        else:
+                            fixed_explanation.append(current_cond)
+
+                explanation = fixed_explanation
             # Add the explanation to the set of rules. We use a set to avoid duplicate rules.
             rules.add(tuple(tuple(e) for e in explanation))
     return [list(list(item) for item in rule) for rule in rules]
