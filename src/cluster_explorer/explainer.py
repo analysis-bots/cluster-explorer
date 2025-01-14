@@ -213,7 +213,7 @@ class Explainer:
         return categorical_features
 
     def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5, p_value=0,
-                              mode='conjunctive'):
+                              mode='conjunction') -> DataFrame:
         """
         Generate explanations for all clusters in the dataset.\n
 
@@ -227,6 +227,7 @@ class Explainer:
         :param separation_threshold: The maximum separation error threshold for an explanation rule to be considered.
         :param p_value: The p-value for feature importance. This value is used to determine the number of top features to consider.
                         Currently, it should be set to the number of top features to consider, and should be the inverse of the conciseness threshold.
+        :param mode: Whether the algorithm should produce conjunctive or disjunctive rules. Default is 'conjunction'.
         :return: A dataframe containing the explanations for all clusters.
         """
         # Initialize the dataframe to store explanations for all clusters
@@ -271,10 +272,10 @@ class Explainer:
             max_length = int(1 / conciseness_threshold)
             # Generate frequent itemsets
             frequent_itemsets, _ = gFIM.itemsets_from_transactions(transactions, item_ancestors_dict,
-                                                                   coverage_threshold, max_length)
+                                                                       coverage_threshold, max_length, mode=mode)
 
             # Convert itemsets to rules
-            rules = convert_itemset_to_rules(frequent_itemsets)
+            rules = convert_itemset_to_rules(frequent_itemsets, mode=mode)
 
             # Initialize analyzer
             analyze = Analyze()
@@ -282,11 +283,11 @@ class Explainer:
             original_df['Cluster'] = self.labels
 
             # Filter original data for the top features and analyze explanations
-            filtered_original_df = original_df[[*top_features, 'Cluster']]
-            # filtered_original_df['Cluster'] = self.labels
+            filtered_original_df = original_df[top_features]
+            filtered_original_df['Cluster'] = self.labels
             explanation_candidates = analyze.analyze_explanation(filtered_original_df, rules, cluster_number,
                                                                  [i for i in self.labels.unique() if
-                                                                  i != cluster_number])
+                                                                  i != cluster_number], mode=mode)
 
             # Filter and refine explanations based on separation threshold and skyline operator
             explanation = explanation_candidates[explanation_candidates['separation_err'] <= separation_threshold]
