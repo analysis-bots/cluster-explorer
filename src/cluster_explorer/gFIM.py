@@ -388,7 +388,7 @@ def apriori(
         #     over_min_support, indices = manager.transaction_indices_sc(candidate, min_support=min_support)
         #     if over_min_support:
         #         found_itemsets[candidate] = len(indices)
-        print(f"{count1},{len(C_k)}")
+        # print(f"{count1},{len(C_k)}")
         #     count1+=1
 
         args_for_parallel = [(candidate, manager, min_support) for candidate in C_k]
@@ -427,7 +427,7 @@ def apriori(
     if verbosity > 0:
         print("Itemset generation terminated.\n")
 
-    print("endd")
+    # print("endd")
     if output_transaction_ids:
         itemsets_out = {
             length: {
@@ -437,7 +437,7 @@ def apriori(
             for (length, itemsets) in large_itemsets.items()
         }
         return itemsets_out, len(manager)
-    print("endd")
+    # print("endd")
 
     # manager.remove_non_candidates(C_k)
 
