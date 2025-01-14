@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Tuple, Generator, Any
+from typing import List, Tuple, Generator, Any, Set
 
 from numpy import number
 from pandas import DataFrame, Series
@@ -183,3 +183,154 @@ def get_optimal_splits(df: DataFrame, tree_splits: np.ndarray, X: DataFrame, y: 
     split_scores = np.array([evaluate_split(split) for split in tree_splits])
     optimal_split_idx = np.argmin(split_scores)
     return sorted(tree_splits[:optimal_split_idx + 1])
+
+def str_rule_to_list(rule: str) -> List:
+    """
+    Convert a rule string to a list of conditions.
+
+    This function takes a rule string and converts it into a list of conditions.
+    Each condition is represented as a list containing a variable, an operator, and a value.
+
+    :param rule: A string representing the rule.
+    :return: A list of conditions representing the rule.
+    """
+    rule = rule.split(", [")
+    for idx, r in enumerate(rule):
+        r = r.replace("[", "").replace("]", "").replace("'", "").replace('"', "")
+        r = r.split(",")
+        if len(r) == 3:
+            # r[2] is the value of the condition. We strip any leading or trailing whitespace, then try to convert it to a number.
+            r[2] = r[2].strip()
+            if r[2].startswith("np.float64("):
+                r[2] = np.float64(r[2].replace("np.float64(", "").replace(")", ""))
+            elif r[2].startswith("np.int64("):
+                r[2] = np.int64(r[2].replace("np.int64(", "").replace(")", ""))
+            else:
+                try:
+                    r[2] = int(r[2])
+                except ValueError:
+                    try:
+                        r[2] = float(r[2])
+                    except ValueError:
+                        pass
+            r[1] = r[1].replace(" ", "")
+        rule[idx] = r
+
+    return rule
+
+
+def merge_ranges(ranges: List[Tuple[number, number]]) -> set[Tuple[number, number]]:
+    """
+    Merge overlapping ranges.
+
+    This function takes a list of ranges and merges any overlapping ranges.
+    If two ranges overlap, they are merged into a single range that spans both ranges.
+
+    :param ranges: A list of ranges to be merged.
+    :return: A list of merged ranges.
+    """
+    ranges = [r for r in ranges if len(r) == 2]
+    ranges.sort()
+    merged_ranges = set(ranges)
+    # We use a separate set to keep track of ranges that need to be removed or added, to avoid modifying the set while iterating over it.
+    to_remove = set()
+    to_add = set()
+    # For every range, check if it overlaps with any other range. If it does, merge the ranges.
+    # We use a set to avoid duplicate ranges.
+    for r in ranges:
+        for other_r in ranges:
+            if r != other_r:
+                if r[1] >= other_r[0] and r[0] <= other_r[1]:
+                    first_start, first_end = r
+                    second_start, second_end = other_r
+                    if first_start == -np.inf:
+                        first_start = second_start
+                    if first_end == np.inf:
+                        first_end = second_end
+                    if second_start == -np.inf:
+                        second_start = first_start
+                    if second_end == np.inf:
+                        second_end = first_end
+                    # Add the merged range and remove the original ranges
+                    to_remove.add(r)
+                    to_remove.add(other_r)
+                    to_add.add((min(first_start, second_start), max(first_end, second_end)))
+
+    merged_ranges -= to_remove
+    merged_ranges |= to_add
+
+    return merged_ranges
+
+
+
+def rule_to_human_readable(rule: List[List[List]], categorical_mapping: dict) -> str:
+    """
+    Convert a rule to a human-readable string.
+
+    This function takes a rule represented as a list of conditions and converts it into a human-readable string.
+    Each condition is represented as a list containing a variable, an operator, and a value.
+
+    :param rule: A list of conditions representing the rule.
+    :param categorical_mapping: A dictionary mapping one-hot encoded categorical variables to their original names.
+    :return: A human-readable string representing the rule.
+    """
+    attr_ranges = {}
+    relation = ""
+    # Go over each condition in the rule and extract ranges for each attribute
+    for condition in rule:
+        if len(condition) == 1:
+            relation = condition[0]
+        elif len(condition) == 3:
+            attr, op, val = condition
+            if attr not in attr_ranges.keys():
+                attr_ranges[attr] = []
+            if op == '==':
+                attr_ranges[attr] = [(val, val)]
+            elif op == '>=':
+                attr_ranges[attr].append((val, np.inf))
+            elif op == '<=':
+                attr_ranges[attr].append((-np.inf, val))
+
+    # Merge overlapping ranges for each attribute
+    attr_ranges = {k: merge_ranges(v) for k, v in attr_ranges.items()}
+    human_readable_rule = ""
+
+    # Convert the ranges to a human-readable string
+    for attr, ranges in attr_ranges.items():
+        for r in ranges:
+            start, end = r
+            # If the start and end of the range are the same, we have an equality condition.
+            if start == end:
+                # We need to check if the attribute is categorical and if it is, we add a condition based on the original attribute name,
+                # before the one-hot encoding.
+                if attr in categorical_mapping:
+                    attr_original = categorical_mapping[attr]
+                    attr_split = attr.split("_", 1)
+                    attr_value = attr_split[1]
+                    if start == 0:
+                        human_readable_rule += f"{attr_original} != {attr_value} "
+                    elif start == 1:
+                        human_readable_rule += f"{attr_original} == {attr_value} "
+                else:
+                    human_readable_rule += f"{attr} == {start} "
+            else:
+                # If the start is -inf, we have a less than or equal condition. If the end is inf, we have a greater than or equal condition.
+                # Otherwise, we have a range condition.
+                if start == -np.inf:
+                    human_readable_rule += f"{attr} <= {end} "
+                elif end == np.inf:
+                    human_readable_rule += f"{attr} >= {start} "
+                else:
+                    human_readable_rule += f"{r[0]} <= {attr} <= {r[1]} "
+            human_readable_rule += relation.upper() + " "
+
+    # We return up to -4 or -5 to cut off the last "and" or "or" from the string
+    if human_readable_rule.endswith("AND "):
+        return human_readable_rule[:-5]
+    elif human_readable_rule.endswith("OR "):
+        return human_readable_rule[:-4]
+    else:
+        return human_readable_rule
+
+
+
