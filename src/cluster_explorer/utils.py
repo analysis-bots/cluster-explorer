@@ -290,9 +290,9 @@ def merge_ranges(ranges: List[Tuple[number, number]]) -> set[Tuple[number, numbe
 
 
 
-def rule_to_human_readable(rule: List[List[List]], categorical_mapping: dict) -> str:
+def rule_to_human_readable_conjunction(rule: List[List[List]], categorical_mapping: dict):
     """
-    Convert a rule to a human-readable string.
+    Convert a conjunctive rule to a human-readable string.
 
     This function takes a rule represented as a list of conditions and converts it into a human-readable string.
     Each condition is represented as a list containing a variable, an operator, and a value.
@@ -350,6 +350,25 @@ def rule_to_human_readable(rule: List[List[List]], categorical_mapping: dict) ->
                 else:
                     human_readable_rule += f"{r[0]} <= {attr} <= {r[1]} "
             human_readable_rule += relation.upper() + " "
+
+    return human_readable_rule
+
+
+
+def rule_to_human_readable(rule: List[List[List]], categorical_mapping: dict, mode: str = 'conjunction') -> str:
+    """
+    Convert a rule to a human-readable string.
+
+    This function takes a rule represented as a list of conditions and converts it into a human-readable string.
+    Each condition is represented as a list containing a variable, an operator, and a value.
+
+    :param rule: A list of conditions representing the rule.
+    :param categorical_mapping: A dictionary mapping one-hot encoded categorical variables to their original names.
+    :param mode: Whether the rule is conjunctive or disjunctive.
+    :return: A human-readable string representing the rule.
+    """
+    if mode == "conjunction":
+        human_readable_rule = rule_to_human_readable_conjunction(rule, categorical_mapping)
 
     # We return up to -4 or -5 to cut off the last "and" or "or" from the string
     if human_readable_rule.endswith("AND "):

@@ -623,6 +623,8 @@ def dssrm(transactions: List[typing.Union[set, tuple, list]],
             if item in item_ancestors_dict:
                 # We use frozensets to ensure that the itemset is hashable
                 transaction[i] = frozenset({(item[0], ancestor) for ancestor in item_ancestors_dict[item]})
+            else:
+                transaction[i] = frozenset({item})
         transactions[j] = frozenset(itertools.chain.from_iterable(transaction))
 
     # Create a list of all items in the transactions, as well as a dictionary to look up the index of an item
