@@ -1,3 +1,4 @@
+import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from . import gFIM
 from .AnalyzeItemsets import Analyze
@@ -231,7 +232,7 @@ class Explainer:
         :return: A dataframe containing the explanations for all clusters.
         """
         # Initialize the dataframe to store explanations for all clusters
-        explanation_for_all_clusters = pd.DataFrame(columns=["coverage", "separation_err", "conciseness", "Cluster"])
+        explanation_for_all_clusters = pd.DataFrame(columns=["coverage", "separation_err", "conciseness", "Cluster"], dtype=float)
 
         # Set thresholds
         self.coverage_threshold = coverage_threshold
@@ -283,7 +284,8 @@ class Explainer:
             original_df['Cluster'] = self.labels
 
             # Filter original data for the top features and analyze explanations
-            filtered_original_df = original_df[top_features]
+            # We use a copy of the original dataframe, because otherwise, we get a SettingWithCopyWarning
+            filtered_original_df = original_df[top_features].copy()
             filtered_original_df['Cluster'] = self.labels
             explanation_candidates = analyze.analyze_explanation(filtered_original_df, rules, cluster_number,
                                                                  [i for i in self.labels.unique() if
@@ -293,7 +295,8 @@ class Explainer:
             explanation = explanation_candidates[explanation_candidates['separation_err'] <= separation_threshold]
             explanation = skyline_operator(explanation)
             explanation['Cluster'] = cluster_number
-            explanation_for_all_clusters = explanation_for_all_clusters._append(explanation)
+            if not explanation.empty:
+                explanation_for_all_clusters = pd.concat([explanation_for_all_clusters, explanation])
 
         explanation_for_all_clusters = explanation_for_all_clusters.reset_index(names=['rule'])
         explanation_for_all_clusters = explanation_for_all_clusters.sort_values(by=['Cluster'])
