@@ -717,19 +717,19 @@ def dssrm(transactions: List[typing.Union[set, tuple, list]],
     # In the paper, they show that the full representation of the disjunctive patterns is given by the union of
     # edcp and fep. However, the closures can be massive, so we only take the closures that are of length <= max_length.
     # This may leave edcp empty, but we still get some patterns via fep.
-    edcp = {pattern for pattern in edcp if len(pattern) <= max_length}
+    edcp = {(pattern,) for pattern in edcp if len(pattern) <= max_length}
     fep = fep.union(edcp)
 
     # Convert the frequent essential patterns to the expected output format
     return_dict = {}
     for pattern in fep:
-        next_candidates_len = len(pattern[0])
-        if next_candidates_len not in return_dict:
-            return_dict[next_candidates_len] = {}
+        candidate_len = len(pattern[0])
+        if candidate_len not in return_dict:
+            return_dict[candidate_len] = {}
         # Convert from a tuple with a frozenset in it in the 0 index to a tuple
         pattern_items = tuple(pattern[0])
         # The actual value is irrelevant, we only care about the key, but we need it for the expected output
-        return_dict[next_candidates_len][pattern_items] = 1
+        return_dict[candidate_len][pattern_items] = 1
 
     return return_dict, len(manager)
 

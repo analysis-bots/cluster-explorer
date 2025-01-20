@@ -231,8 +231,13 @@ class Explainer:
         :param mode: Whether the algorithm should produce conjunctive or disjunctive rules. Default is 'conjunction'.
         :return: A dataframe containing the explanations for all clusters.
         """
-        # Initialize the dataframe to store explanations for all clusters
-        explanation_for_all_clusters = pd.DataFrame(columns=["coverage", "separation_err", "conciseness", "Cluster"], dtype=float)
+        # Initialize the dataframe to store explanations for all clusters.
+        # The setting of the dtype is needed, otherwise the concat operation will fail in the future, since concat with
+        # an empty dataframe without setting the dtype will be deprecated, and currently raises a warning.
+        explanation_for_all_clusters = pd.DataFrame(columns=["coverage", "separation_err", "conciseness", "Cluster"],
+                                                    dtype=float)
+        # The dtype of the Cluster column needs to be set to int
+        explanation_for_all_clusters["Cluster"] = explanation_for_all_clusters["Cluster"].astype(int)
 
         # Set thresholds
         self.coverage_threshold = coverage_threshold

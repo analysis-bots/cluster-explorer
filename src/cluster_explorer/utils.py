@@ -114,9 +114,12 @@ def convert_itemset_to_rules(itemsets: dict, mode: str = 'conjunction') -> List[
             elif mode == 'disjunction':
                 fixed_explanation = []
                 flag = False
-                for i in range(len(explanation) - 1):
+                for i in range(len(explanation)):
                     current_cond = explanation[i]
-                    next_cond = explanation[i + 1]
+                    if i < len(explanation) - 1:
+                        next_cond = explanation[i + 1]
+                    else:
+                        next_cond = [None, None, None]
                     # If the current condition and the next condition are on the same attribute and represent a range, we group them together
                     if current_cond[0] == next_cond[0] and not flag and (current_cond[1] == ">=" or current_cond[1] == "<="):
                         fixed_explanation.append(['('])
@@ -126,12 +129,15 @@ def convert_itemset_to_rules(itemsets: dict, mode: str = 'conjunction') -> List[
                         fixed_explanation.append([')'])
                         flag = True
                     else:
-                        fixed_explanation.append(['or'])
                         if flag:
                             flag = False
+                            fixed_explanation.append(['or'])
                         else:
                             fixed_explanation.append(current_cond)
+                            fixed_explanation.append(['or'])
 
+                # Remove the last 'or' from the explanation, because that's just a hanging 'or' at the end
+                fixed_explanation.pop(-1)
                 explanation = fixed_explanation
             # Add the explanation to the set of rules. We use a set to avoid duplicate rules.
             rules.add(tuple(tuple(e) for e in explanation))
@@ -354,6 +360,58 @@ def rule_to_human_readable_conjunction(rule: List[List[List]], categorical_mappi
     return human_readable_rule
 
 
+def rule_to_human_readable_disjunction(rule: List[List[List]], categorical_mapping: dict):
+    human_readable_rule = ""
+    idx = 0
+    rule_len = len(rule)
+    while idx < rule_len:
+        condition = rule[idx]
+        # In the case of a condition being a range surrounded by parentheses, we make a between condition
+        if len(condition) == 1 and condition[0] == '(':
+            idx += 1
+            first_cond = rule[idx]
+            idx += 2
+            range = [-np.inf, np.inf]
+            second_cond = rule[idx]
+            attr = first_cond[0]
+            first_cond_op = first_cond[1]
+            second_cond_op = second_cond[1]
+            if first_cond_op == '>=' or first_cond_op == '>':
+                range[0] = first_cond[2]
+            elif first_cond_op == '<=' or first_cond_op == '<':
+                range[1] = first_cond[2]
+            if second_cond_op == '>=' or second_cond_op == '>':
+                range[0] = second_cond[2]
+            elif second_cond_op == '<=' or second_cond_op == '<':
+                range[1] = second_cond[2]
+            range.sort()
+            human_readable_rule += f"({range[0]} <= {attr} <= {range[1]}) OR "
+        elif len(condition) == 3:
+            attr, op, val = condition
+            if attr in categorical_mapping:
+                attr_original = categorical_mapping[attr]
+                attr_split = attr.split("_", 1)
+                attr_value = attr_split[1]
+            else:
+                attr_original = attr
+                attr_value = val
+            if op == '==':
+                if val == 0:
+                    human_readable_rule += f"{attr_original} != {attr_value} OR "
+                elif val == 1:
+                    human_readable_rule += f"{attr_original} == {attr_value} OR "
+            elif op == '>=' or op == '>':
+                human_readable_rule += f"{attr_original} >= {attr_value} OR "
+            elif op == '<=' or op == '<':
+                human_readable_rule += f"{attr_original} <= {attr_value} OR "
+
+        idx += 1
+
+    return human_readable_rule
+
+
+
+
 
 def rule_to_human_readable(rule: List[List[List]], categorical_mapping: dict, mode: str = 'conjunction') -> str:
     """
@@ -369,6 +427,8 @@ def rule_to_human_readable(rule: List[List[List]], categorical_mapping: dict, mo
     """
     if mode == "conjunction":
         human_readable_rule = rule_to_human_readable_conjunction(rule, categorical_mapping)
+    elif mode == 'disjunction':
+        human_readable_rule = rule_to_human_readable_disjunction(rule, categorical_mapping)
 
     # We return up to -4 or -5 to cut off the last "and" or "or" from the string
     if human_readable_rule.endswith("AND "):
