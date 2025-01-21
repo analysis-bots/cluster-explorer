@@ -139,7 +139,7 @@ def separation_err_and_coverage(data: DataFrame, class_number: int, rules: Itera
     :return: The separation error and coverage of the rules
     """
     # Generate a condition based on the rules, and apply it to the data
-    condition = condition_generator(data, rules)
+    condition = condition_generator(data, rules, mode=mode)
     filter_data = data[condition]
 
     # If the rule does not cover any points, return 1 for separation error and 0 for coverage
