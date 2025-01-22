@@ -1,3 +1,5 @@
+import warnings
+
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
 from . import gFIM
@@ -136,7 +138,7 @@ class Explainer:
 
         return item_ancestors_dict
 
-    def model_feature_importance(self, df: DataFrame, labels: Series, p: int=5) -> dict:
+    def model_feature_importance(self, df: DataFrame, labels: Series, n_attr: int=5) -> dict:
         """
         Compute the feature importance for each class.\n
 
@@ -146,7 +148,7 @@ class Explainer:
         all other classes.\n
         :param df: The dataframe containing the data and features.
         :param labels: A series containing the class labels.
-        :param p: The number of top features to consider.
+        :param n_attr: The number of top features to consider.
         :return: A dictionary where the key is the class label and the value is a list of tuples containing the top
                     features and their importance.
         """
@@ -177,7 +179,7 @@ class Explainer:
             # for the class of interest
             average_importance = {name: np.mean(importance) for name, importance in aggregate_importance.items()}
             feature_importance[class_of_interest] = sorted(average_importance.items(), key=lambda x: x[1],
-                                                           reverse=True)[:p]
+                                                           reverse=True)[:n_attr]
 
         return feature_importance
 
@@ -213,7 +215,7 @@ class Explainer:
         # but it useful for outside users who may want to know which features were one-hot encoded.
         return categorical_features
 
-    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5, p_value=0,
+    def generate_explanations(self, coverage_threshold=0.6, conciseness_threshold=0.33, separation_threshold=0.5, p_value=1,
                               mode='conjunction') -> DataFrame:
         """
         Generate explanations for all clusters in the dataset.\n
@@ -226,8 +228,8 @@ class Explainer:
         :param conciseness_threshold: The minimum conciseness threshold for an explanation rule to be considered.
                                       This value is the inverse of the maximum number of predicates in a rule.
         :param separation_threshold: The maximum separation error threshold for an explanation rule to be considered.
-        :param p_value: The p-value for feature importance. This value is used to determine the number of top features to consider.
-                        Currently, it should be set to the number of top features to consider, and should be the inverse of the conciseness threshold.
+        :param p_value: A scaling parameter for the number of top features to consider based on conciseness threshold.
+        Number of top features is int((1 / conciseness_threshold) * p_value). Default is 1.
         :param mode: Whether the algorithm should produce conjunctive or disjunctive rules. Default is 'conjunction'.
         :return: A dataframe containing the explanations for all clusters.
         """
@@ -260,7 +262,11 @@ class Explainer:
 
         # Determine the number of top features to consider based on conciseness threshold
         #p_value = int((1 / conciseness_threshold))
-        feature_importance = self.model_feature_importance(self.df.copy(), self.labels, p_value)
+        n_attr = int((1 / conciseness_threshold) * p_value)
+        if n_attr < 1:
+            n_attr = 1
+            warnings.warn("The number of top features to consider is less than 1. Setting it to 1. Please consider changing the conciseness threshold or p-value.")
+        feature_importance = self.model_feature_importance(self.df.copy(), self.labels, n_attr)
 
         for cluster_number in self.labels.unique():
             # Filter data for the current cluster

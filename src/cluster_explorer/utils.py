@@ -385,7 +385,7 @@ def rule_to_human_readable_disjunction(rule: List[List[List]], categorical_mappi
             elif second_cond_op == '<=' or second_cond_op == '<':
                 range[1] = second_cond[2]
             range.sort()
-            human_readable_rule += f"({range[0]} <= {attr} <= {range[1]}) OR "
+            human_readable_rule += f"{range[0]} <= {attr} <= {range[1]} OR "
         elif len(condition) == 3:
             attr, op, val = condition
             if attr in categorical_mapping:
