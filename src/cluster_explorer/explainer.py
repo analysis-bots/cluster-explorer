@@ -205,7 +205,11 @@ class Explainer:
         for col in categorical_features:
             self.df[col] = self.df[col].astype(str)
 
-        enc = OneHotEncoder(min_frequency=0.1, handle_unknown="infrequent_if_exist", sparse_output=False)
+        # Changed min_frequency from 0.1 to 0.01. This is because when set to 0.1, we would often see
+        # feature == infrequent_sklearn in our explanations, which is not very informative.
+        # With 0.01, this should only happen for features that are truly infrequent, and are thus unlikely
+        # to be important for the cluster to begin with.
+        enc = OneHotEncoder(min_frequency=0.01, handle_unknown="infrequent_if_exist", sparse_output=False)
 
         encoded_categories = enc.fit_transform(self.df.loc[:, categorical_features])
         encoded_df = pd.DataFrame(encoded_categories, columns=enc.get_feature_names_out(categorical_features))
