@@ -14,6 +14,27 @@ from optbinning import MulticlassOptimalBinning
 from .utils import get_optimal_splits
 from typing import List, Tuple
 
+def custom_check_x_y(x,y):
+    """
+    A custom implementation of the _check_x_y function from optbinning.metrics module.
+    The only difference is the call to check_array: their function uses force_all_finite=True, which is deprecated as
+    of scikit-learn 1.6.0, with a warning to use ensure_all_finite instead.
+    And so, we use this function to monkey-patch the optbinning.metrics module, as otherwise, we get hundreds of warnings
+    when running cluster-explorer.
+    """
+    from sklearn.utils import check_array
+    from sklearn.utils import check_consistent_length
+
+    x = check_array(x, ensure_2d=False, ensure_all_finite=True)
+    y = check_array(y, ensure_2d=False, ensure_all_finite=True)
+
+    check_consistent_length(x, y)
+
+    return x, y
+
+import optbinning.binning.metrics as metrics
+metrics._check_x_y = custom_check_x_y
+
 
 def bin_equal_width(df: DataFrame, labels: Series, numeric_attribute: str, conciseness_threshold: float, cluster_number: int=None) -> List[Tuple[float, float]]:
     """
