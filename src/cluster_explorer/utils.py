@@ -309,7 +309,9 @@ def rule_to_human_readable_conjunction(rule: List[List[List]], categorical_mappi
     """
     attr_ranges = {}
     relation = ""
-    # Go over each condition in the rule and extract ranges for each attribute
+    # Go over each condition in the rule and extract ranges for each attribute.
+    # We safely assume that attributes are not repeated in the rule, since this is a conjunction, and thus
+    # repeated attributes would drop the support to 0 if they are not overlapping, or would be redundant if they are overlapping.
     for condition in rule:
         if len(condition) == 1:
             relation = condition[0]
@@ -334,15 +336,23 @@ def rule_to_human_readable_conjunction(rule: List[List[List]], categorical_mappi
             start, end = r
             # If the start and end of the range are the same, we have an equality condition.
             if start == end:
+                # We can reach this condition either from a '==' operator or from two inequalities x <= y and x >= y.
+                # In the simple case of '==', 0 is != and 1 is ==.
+                # Otherwise, the value of the equality is unknown, and we need to know the actual operator to determine if we need to write a != or == in the string.
+                attribute_op = [c[1] for c in rule if c[0] == attr]
+                is_equality_op = all([op == '==' for op in attribute_op])
                 # We need to check if the attribute is categorical and if it is, we add a condition based on the original attribute name,
                 # before the one-hot encoding.
                 if attr in categorical_mapping:
                     attr_original = categorical_mapping[attr]
                     attr_split = attr.split("_", 1)
-                    attr_value = attr_split[1]
-                    if start == 0:
+                    if len(attr_split) > 1:
+                        attr_value = attr_split[1]
+                    else:
+                        attr_value = start
+                    if start == 0 and is_equality_op:
                         human_readable_rule += f"{attr_original} != {attr_value} "
-                    elif start == 1:
+                    else:
                         human_readable_rule += f"{attr_original} == {attr_value} "
                 else:
                     human_readable_rule += f"{attr} == {start} "
@@ -386,24 +396,32 @@ def rule_to_human_readable_disjunction(rule: List[List[List]], categorical_mappi
                 range[1] = second_cond[2]
             range.sort()
             human_readable_rule += f"{range[0]} <= {attr} <= {range[1]} OR "
+
+        # Otherwise, we process the condition as usual
         elif len(condition) == 3:
             attr, op, val = condition
-            if attr in categorical_mapping:
-                attr_original = categorical_mapping[attr]
-                attr_split = attr.split("_", 1)
-                attr_value = attr_split[1]
-            else:
-                attr_original = attr
-                attr_value = val
+            # If the operation is an equality condition, we add an equality clause
             if op == '==':
+                # We also account for the case where the attribute is categorical, and has been one-hot encoded.
+                if attr in categorical_mapping:
+                    attr_original = categorical_mapping[attr]
+                    attr_split = attr.split("_", 1)
+                    if len(attr_split) > 1:
+                        attr_value = attr_split[1]
+                    else:
+                        attr_value = val
+                else:
+                    attr_original = attr
+                    attr_value = val
                 if val == 0:
                     human_readable_rule += f"{attr_original} != {attr_value} OR "
                 elif val == 1:
                     human_readable_rule += f"{attr_original} == {attr_value} OR "
+
             elif op == '>=' or op == '>':
-                human_readable_rule += f"{attr_original} >= {attr_value} OR "
+                human_readable_rule += f"{attr} >= {val} OR "
             elif op == '<=' or op == '<':
-                human_readable_rule += f"{attr_original} <= {attr_value} OR "
+                human_readable_rule += f"{attr} <= {val} OR "
 
         idx += 1
 
