@@ -13,7 +13,7 @@ import Experiments
 import SHAPexplanation
 import SkopeRules
 import Anchor
-from src.explainer import Explainer
+from cluster_explorer import Explainer
 from AnalyzeItemsets import Analyze
 
 warnings.filterwarnings('ignore')
