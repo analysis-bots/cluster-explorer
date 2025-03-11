@@ -10,7 +10,7 @@ def conciseness(rules: Iterable[Iterable[Tuple | List]]) -> float | int:
     """
     Compute the conciseness of a set of rules.\n
     This measure is defined as:\n
-    .. math:: Conciseness(E_c) = \\frac{1}{|\{P \quad | \quad P \quad is \quad a \quad predicate \quad in \quad E_c\}|}\n
+    .. math:: Conciseness(E_c) = \\frac{1}{|\\{P \quad | \quad P \quad is \quad a \quad predicate \quad in \quad E_c\\}|}\n
     Where:\n
     - :math:`E_c` is a set of explanations for cluster c\n
     In words, the conciseness is the inverse of the number of predicates in the set of rules.\n
@@ -119,7 +119,7 @@ def separation_err_and_coverage(data: DataFrame, class_number: int, rules: Itera
     """
     Compute the separation error and coverage of a set of rules.\n
     The separation error is defined as:\n
-    .. math:: SeperationErr(E_c) = (\\frac{1}{|\{x \\in X | E(x) = True\}|}) * |\{x \in X \quad | \quad E_c(x) = True \ \wedge \ CL(x) \in  C - \{c\}\}|\n
+    .. math:: SeperationErr(E_c) = (\\frac{1}{|\\{x \\in X | E(x) = True\\}|}) * |\\{x \in X \quad | \quad E_c(x) = True \ \wedge \ CL(x) \in  C - \\{c\\}\\}|\n
     Where:\n
     - :math:`E_c` is a set of explanations for cluster c\n
     - :math:`X` is the data\n
@@ -128,13 +128,13 @@ def separation_err_and_coverage(data: DataFrame, class_number: int, rules: Itera
     - :math:`C` is the set of all cluster labels\n
     - :math:`c` is the cluster label\n
     In words, the separation error is the ratio of points for which the explanation :math:`E_c` is true yet the cluster label is not c.\n
-    .. math:: Coverage(E_c) = (\\frac{1}{|\{x \in X | CL(x) = c\}|}) * |\{x \in X \quad | \quad E_c(x) = True \ \wedge \ CL(x) = c\}|\n
+    .. math:: Coverage(E_c) = (\\frac{1}{|\\{x \in X | CL(x) = c\\}|}) * |\\{x \in X \quad | \quad E_c(x) = True \ \wedge \ CL(x) = c\\}|\n
     In words, the coverage is the ratio of points for which the explanation :math:`E_c` is true and the cluster label is c.\n
     :param data: The data to apply the rules to
     :param class_number: The cluster label :math:`c`
     :param rules: A set of rules
-    :param other_classes: The set of all cluster labels without :math:`c` - :math:`C - \{c\}`
-    :param class_size: The size of the class :math:`|\{x \in X | CL(x) = c\}|`
+    :param other_classes: The set of all cluster labels without :math:`c` - :math:`C - \\{c\\\}`
+    :param class_size: The size of the class :math:`|\\{x \in X | CL(x) = c\\}|`
     :param mode: Whether the rules should be applied as conjunctions or disjunctions.
     :return: The separation error and coverage of the rules
     """
