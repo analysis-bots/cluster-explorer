@@ -21,7 +21,7 @@ def get_long_description():
 
 setup(
     name='cluster_explorer',
-    version='1.0.1',#get_version(),
+    version='1.0.2',#get_version(),
     package_dir={'': 'src'},
     packages=find_packages(where='src'),
     long_description_content_type="text/markdown",
@@ -31,9 +31,9 @@ setup(
     },
     install_requires=[
         'wheel',
-        'pandas',
-        'numpy',
-        'scikit-learn',
-        'optbinning'
+        'pandas>=2.2.3',
+        'numpy>=2.1.3',
+        'scikit-learn>=1.6.0',
+        'optbinning>=0.20.1'
     ]
 )

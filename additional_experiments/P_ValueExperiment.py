@@ -9,8 +9,8 @@ from csv import writer
 from sklearn.preprocessing import OneHotEncoder
 
 from experiments import Experiments
-from src.explainer import Explainer
-from src.AnalyzeItemsets import Analyze
+from cluster_explorer import Explainer
+from cluster_explorer.AnalyzeItemsets import Analyze
 
 
 warnings.filterwarnings('ignore')
